@@ -118,10 +118,8 @@ class RoomsPage:
         self.end_sess = QComboBox()
         self.end_disc = QDoubleSpinBox(); self.end_disc.setMaximum(99999)
         self.end_disc.setPrefix("EGP "); self.end_disc.setDecimals(2)
-        self.end_promo = QLineEdit(); self.end_promo.setPlaceholderText("Promo code (optional)")
         f2.addRow("Session:", self.end_sess)
         f2.addRow("Discount:", self.end_disc)
-        f2.addRow("Promo:", self.end_promo)
         rl.addLayout(f2)
         b2 = QPushButton("⏹  End & Generate Bill"); b2.setObjectName("danger")
         b2.setCursor(Qt.PointingHandCursor); b2.clicked.connect(self.handle_end)
@@ -180,7 +178,7 @@ class RoomsPage:
         sid = self.end_sess.currentData()
         if not sid:
             return QMessageBox.warning(self.page, "Error", "No active session.")
-        ok, res = SessionManager.end_session(sid, self.end_disc.value(), self.end_promo.text())
+        ok, res = SessionManager.end_session(sid, self.end_disc.value())
         if ok:
             msg = (f"Session #{res['session_id']} Closed\n\n"
                    f"Duration:     {res['duration_hours']:.2f} hrs\n"
@@ -190,7 +188,7 @@ class RoomsPage:
                    f"{'─'*30}\n"
                    f"TOTAL:        {res['total_bill']:.2f} EGP")
             QMessageBox.information(self.page, "💰 Final Bill", msg)
-            self.end_disc.setValue(0); self.end_promo.clear()
+            self.end_disc.setValue(0)
             if self._refresh_cb: self._refresh_cb()
         else:
             QMessageBox.warning(self.page, "Error", res)
