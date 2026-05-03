@@ -38,6 +38,18 @@ def init_db():
         )
     ''')
 
+    # ── Suppliers ────────────────────────────────────────────────────────────
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS suppliers (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            name    TEXT    NOT NULL,
+            phone   TEXT    DEFAULT '',
+            email   TEXT    DEFAULT '',
+            address TEXT    DEFAULT '',
+            notes   TEXT    DEFAULT ''
+        )
+    ''')
+
     # ── Sessions ─────────────────────────────────────────────────────────────
     c.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
@@ -96,12 +108,112 @@ def init_db():
         )
     ''')
 
+    # ── Sales Invoices ───────────────────────────────────────────────────────
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS sales_invoices (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_name  TEXT    NOT NULL DEFAULT 'Walk-in',
+            invoice_date   DATETIME NOT NULL,
+            total_amount   REAL    DEFAULT 0.0,
+            status         TEXT    DEFAULT 'Unpaid' CHECK(status IN ('Paid','Unpaid','Partial')),
+            notes          TEXT    DEFAULT ''
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS sales_invoice_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id  INTEGER NOT NULL,
+            product_id  INTEGER NOT NULL,
+            quantity    INTEGER NOT NULL DEFAULT 1,
+            unit_price  REAL    NOT NULL,
+            total       REAL    NOT NULL,
+            FOREIGN KEY(invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE,
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+    ''')
+
+    # ── Purchase Invoices ────────────────────────────────────────────────────
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS purchase_invoices (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            supplier_name   TEXT    NOT NULL DEFAULT 'Unknown',
+            invoice_date    DATETIME NOT NULL,
+            total_amount    REAL    DEFAULT 0.0,
+            status          TEXT    DEFAULT 'Unpaid' CHECK(status IN ('Paid','Unpaid','Partial')),
+            notes           TEXT    DEFAULT ''
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS purchase_invoice_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id  INTEGER NOT NULL,
+            product_id  INTEGER NOT NULL,
+            quantity    INTEGER NOT NULL DEFAULT 1,
+            unit_price  REAL    NOT NULL,
+            total       REAL    NOT NULL,
+            FOREIGN KEY(invoice_id) REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+    ''')
+
+    # ── Journal Entries ──────────────────────────────────────────────────────
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_date  DATETIME NOT NULL,
+            description TEXT    DEFAULT '',
+            reference   TEXT    DEFAULT ''
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS journal_lines (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id    INTEGER NOT NULL,
+            account     TEXT    NOT NULL,
+            debit       REAL    DEFAULT 0.0,
+            credit      REAL    DEFAULT 0.0,
+            FOREIGN KEY(entry_id) REFERENCES journal_entries(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # ── Chart of Accounts ────────────────────────────────────────────────────
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS chart_of_accounts (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_code TEXT    NOT NULL UNIQUE,
+            account_name TEXT    NOT NULL,
+            account_type TEXT    NOT NULL CHECK(account_type IN ('Asset','Liability','Equity','Revenue','Expense')),
+            parent_code  TEXT    DEFAULT ''
+        )
+    ''')
+
     conn.commit()
 
     # Seed default data only once
     c.execute('SELECT COUNT(*) FROM rooms')
     if c.fetchone()[0] == 0:
         _seed_data(c)
+        conn.commit()
+
+    # Seed chart of accounts if empty
+    c.execute('SELECT COUNT(*) FROM chart_of_accounts')
+    if c.fetchone()[0] == 0:
+        _seed_accounts(c)
+        conn.commit()
+
+    # Seed default customers if empty
+    c.execute('SELECT COUNT(*) FROM customers')
+    if c.fetchone()[0] == 0:
+        _seed_customers(c)
+        conn.commit()
+
+    # Seed default suppliers if empty
+    c.execute('SELECT COUNT(*) FROM suppliers')
+    if c.fetchone()[0] == 0:
+        _seed_suppliers(c)
         conn.commit()
 
     conn.close()
@@ -145,4 +257,59 @@ def _seed_data(c):
     c.executemany(
         'INSERT INTO expenses (category, amount, date, description) VALUES (?,?,?,?)',
         expenses
+    )
+
+
+def _seed_accounts(c):
+    """Seed a default chart of accounts."""
+    accounts = [
+        ('1000', 'Cash',                'Asset'),
+        ('1100', 'Accounts Receivable', 'Asset'),
+        ('1200', 'Inventory',           'Asset'),
+        ('1300', 'Prepaid Expenses',    'Asset'),
+        ('2000', 'Accounts Payable',    'Liability'),
+        ('2100', 'Accrued Expenses',    'Liability'),
+        ('2200', 'Unearned Revenue',    'Liability'),
+        ('3000', 'Owner Equity',        'Equity'),
+        ('3100', 'Retained Earnings',   'Equity'),
+        ('4000', 'Sales Revenue',       'Revenue'),
+        ('4100', 'Service Revenue',     'Revenue'),
+        ('4200', 'Room Revenue',        'Revenue'),
+        ('5000', 'Cost of Goods Sold',  'Expense'),
+        ('5100', 'Rent Expense',        'Expense'),
+        ('5200', 'Salaries Expense',    'Expense'),
+        ('5300', 'Utilities Expense',   'Expense'),
+        ('5400', 'Supplies Expense',    'Expense'),
+        ('5500', 'Depreciation',        'Expense'),
+        ('5600', 'Other Expenses',      'Expense'),
+    ]
+    c.executemany(
+        'INSERT INTO chart_of_accounts (account_code, account_name, account_type) VALUES (?,?,?)',
+        accounts
+    )
+
+
+def _seed_customers(c):
+    """Seed default customers."""
+    customers = [
+        ('Paula Samy',  '01012345678', 'paula@email.com', 'Regular customer'),
+        ('Ahmed Hassan', '01098765432', 'ahmed@email.com', 'VIP member'),
+        ('Sara Mohamed', '01055566677', 'sara@email.com', ''),
+    ]
+    c.executemany(
+        'INSERT INTO customers (name, phone, email, notes) VALUES (?,?,?,?)',
+        customers
+    )
+
+
+def _seed_suppliers(c):
+    """Seed default suppliers."""
+    suppliers = [
+        ('Fresh Foods Co.',  '0223456789', 'info@freshfoods.com', 'Cairo, Egypt', 'Main food supplier'),
+        ('Beverage World',   '0234567890', 'sales@bevworld.com',  'Giza, Egypt',  'Drinks supplier'),
+        ('Office Supplies',  '0245678901', 'office@supplies.com', 'Alex, Egypt',  'Stationery & misc'),
+    ]
+    c.executemany(
+        'INSERT INTO suppliers (name, phone, email, address, notes) VALUES (?,?,?,?,?)',
+        suppliers
     )

@@ -419,3 +419,358 @@ class ReportManager:
             'inventory_value':    inv_value,
             'snacks_today':       sold_today,
         }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Sales Invoice Manager
+# ────────────────────────────────────────────────────────────────────────────
+class SalesInvoiceManager:
+
+    @staticmethod
+    def get_customers():
+        conn = get_connection()
+        rows = conn.execute("SELECT id, name FROM customers ORDER BY name").fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def create_invoice(customer_name, items, notes=''):
+        """items = list of (product_id, quantity, unit_price)"""
+        conn = get_connection()
+        date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        total = sum(q * p for _, q, p in items)
+        conn.execute(
+            "INSERT INTO sales_invoices (customer_name, invoice_date, total_amount, notes) VALUES (?,?,?,?)",
+            (customer_name, date, total, notes)
+        )
+        inv_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for pid, qty, price in items:
+            conn.execute(
+                "INSERT INTO sales_invoice_items (invoice_id, product_id, quantity, unit_price, total) VALUES (?,?,?,?,?)",
+                (inv_id, pid, qty, price, qty * price)
+            )
+            # Deduct stock
+            conn.execute("UPDATE products SET quantity = quantity - ? WHERE id=?", (qty, pid))
+        # Auto journal entry: Debit Accounts Receivable, Credit Sales Revenue
+        conn.execute(
+            "INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+            (date, f"Sales Invoice #{inv_id} - {customer_name}", f"SI-{inv_id}")
+        )
+        je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Accounts Receivable', total, 0))
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Sales Revenue', 0, total))
+        conn.commit()
+        conn.close()
+        return True, f"Sales Invoice #{inv_id} created — Total: {total:.2f} EGP"
+
+    @staticmethod
+    def get_all_invoices():
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT id, customer_name, invoice_date, total_amount, status FROM sales_invoices ORDER BY id DESC"
+        ).fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_invoice_items(invoice_id):
+        conn = get_connection()
+        rows = conn.execute('''
+            SELECT si.id, p.name, si.quantity, si.unit_price, si.total
+            FROM sales_invoice_items si JOIN products p ON si.product_id = p.id
+            WHERE si.invoice_id = ?
+        ''', (invoice_id,)).fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def delete_invoice(invoice_id):
+        conn = get_connection()
+        conn.execute("DELETE FROM sales_invoice_items WHERE invoice_id=?", (invoice_id,))
+        conn.execute("DELETE FROM sales_invoices WHERE id=?", (invoice_id,))
+        conn.commit()
+        conn.close()
+        return True, "Invoice deleted."
+
+    @staticmethod
+    def mark_paid(invoice_id):
+        conn = get_connection()
+        conn.execute("UPDATE sales_invoices SET status='Paid' WHERE id=?", (invoice_id,))
+        conn.commit()
+        conn.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Purchase Invoice Manager
+# ────────────────────────────────────────────────────────────────────────────
+class PurchaseInvoiceManager:
+
+    @staticmethod
+    def get_suppliers():
+        conn = get_connection()
+        rows = conn.execute("SELECT id, name FROM suppliers ORDER BY name").fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def create_invoice(supplier_name, items, notes=''):
+        """items = list of (product_id, quantity, unit_price)"""
+        conn = get_connection()
+        date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        total = sum(q * p for _, q, p in items)
+        conn.execute(
+            "INSERT INTO purchase_invoices (supplier_name, invoice_date, total_amount, notes) VALUES (?,?,?,?)",
+            (supplier_name, date, total, notes)
+        )
+        inv_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for pid, qty, price in items:
+            conn.execute(
+                "INSERT INTO purchase_invoice_items (invoice_id, product_id, quantity, unit_price, total) VALUES (?,?,?,?,?)",
+                (inv_id, pid, qty, price, qty * price)
+            )
+            # Add to stock
+            conn.execute("UPDATE products SET quantity = quantity + ? WHERE id=?", (qty, pid))
+        # Auto journal entry: Debit Inventory, Credit Accounts Payable
+        conn.execute(
+            "INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+            (date, f"Purchase Invoice #{inv_id} - {supplier_name}", f"PI-{inv_id}")
+        )
+        je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Inventory', total, 0))
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Accounts Payable', 0, total))
+        conn.commit()
+        conn.close()
+        return True, f"Purchase Invoice #{inv_id} created — Total: {total:.2f} EGP"
+
+    @staticmethod
+    def get_all_invoices():
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT id, supplier_name, invoice_date, total_amount, status FROM purchase_invoices ORDER BY id DESC"
+        ).fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def delete_invoice(invoice_id):
+        conn = get_connection()
+        conn.execute("DELETE FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,))
+        conn.execute("DELETE FROM purchase_invoices WHERE id=?", (invoice_id,))
+        conn.commit()
+        conn.close()
+        return True, "Invoice deleted."
+
+    @staticmethod
+    def mark_paid(invoice_id):
+        conn = get_connection()
+        conn.execute("UPDATE purchase_invoices SET status='Paid' WHERE id=?", (invoice_id,))
+        conn.commit()
+        conn.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Accounting Manager
+# ────────────────────────────────────────────────────────────────────────────
+class AccountingManager:
+
+    @staticmethod
+    def get_accounts():
+        conn = get_connection()
+        rows = conn.execute("SELECT account_code, account_name, account_type FROM chart_of_accounts ORDER BY account_code").fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def create_journal_entry(description, lines, reference=''):
+        """lines = list of (account_name, debit, credit)"""
+        conn = get_connection()
+        date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                     (date, description, reference))
+        eid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for acc, dr, cr in lines:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (eid, acc, dr, cr))
+        conn.commit()
+        conn.close()
+        return True, f"Journal Entry #{eid} created."
+
+    @staticmethod
+    def get_journal_entries():
+        conn = get_connection()
+        rows = conn.execute('''
+            SELECT je.id, je.entry_date, je.description, je.reference,
+                   COALESCE(SUM(jl.debit),0) as total_debit
+            FROM journal_entries je
+            LEFT JOIN journal_lines jl ON je.id = jl.entry_id
+            GROUP BY je.id ORDER BY je.id DESC
+        ''').fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_journal_lines(entry_id):
+        conn = get_connection()
+        rows = conn.execute("SELECT account, debit, credit FROM journal_lines WHERE entry_id=?", (entry_id,)).fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_general_ledger():
+        conn = get_connection()
+        rows = conn.execute('''
+            SELECT jl.account, je.entry_date, je.description, jl.debit, jl.credit, je.reference
+            FROM journal_lines jl JOIN journal_entries je ON jl.entry_id = je.id
+            ORDER BY jl.account, je.entry_date
+        ''').fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_trial_balance():
+        conn = get_connection()
+        rows = conn.execute('''
+            SELECT jl.account, SUM(jl.debit) as total_dr, SUM(jl.credit) as total_cr
+            FROM journal_lines jl
+            GROUP BY jl.account ORDER BY jl.account
+        ''').fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_income_statement():
+        conn = get_connection()
+        # Revenue accounts
+        rev = conn.execute('''
+            SELECT jl.account, SUM(jl.credit) - SUM(jl.debit) as net
+            FROM journal_lines jl
+            JOIN chart_of_accounts ca ON jl.account = ca.account_name
+            WHERE ca.account_type = 'Revenue'
+            GROUP BY jl.account
+        ''').fetchall()
+        # Expense accounts
+        exp = conn.execute('''
+            SELECT jl.account, SUM(jl.debit) - SUM(jl.credit) as net
+            FROM journal_lines jl
+            JOIN chart_of_accounts ca ON jl.account = ca.account_name
+            WHERE ca.account_type = 'Expense'
+            GROUP BY jl.account
+        ''').fetchall()
+        # Also include system expenses
+        sys_exp = conn.execute("SELECT COALESCE(SUM(amount),0) FROM expenses").fetchone()[0]
+        conn.close()
+        total_rev = sum(r[1] for r in rev)
+        total_exp = sum(e[1] for e in exp) + sys_exp
+        return {'revenues': rev, 'expenses': exp, 'system_expenses': sys_exp,
+                'total_revenue': total_rev, 'total_expenses': total_exp,
+                'net_income': total_rev - total_exp}
+
+    @staticmethod
+    def get_balance_sheet():
+        conn = get_connection()
+        result = {}
+        for atype in ['Asset', 'Liability', 'Equity']:
+            rows = conn.execute('''
+                SELECT jl.account, SUM(jl.debit) - SUM(jl.credit) as balance
+                FROM journal_lines jl
+                JOIN chart_of_accounts ca ON jl.account = ca.account_name
+                WHERE ca.account_type = ?
+                GROUP BY jl.account
+            ''', (atype,)).fetchall()
+            result[atype] = rows
+        # Add inventory value as asset
+        inv_val = conn.execute("SELECT COALESCE(SUM(quantity*cost_price),0) FROM products").fetchone()[0]
+        # Add cash from paid invoices
+        cash_in = conn.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_invoices WHERE status='Paid'").fetchone()[0]
+        cash_out = conn.execute("SELECT COALESCE(SUM(total_amount),0) FROM purchase_invoices WHERE status='Paid'").fetchone()[0]
+        sys_exp = conn.execute("SELECT COALESCE(SUM(amount),0) FROM expenses").fetchone()[0]
+        conn.close()
+        result['inventory_value'] = inv_val
+        result['cash_balance'] = cash_in - cash_out - sys_exp
+        return result
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Account Statement Manager
+# ────────────────────────────────────────────────────────────────────────────
+class AccountStatementManager:
+
+    @staticmethod
+    def get_customer_statement(customer_name=None):
+        conn = get_connection()
+        if customer_name:
+            rows = conn.execute('''
+                SELECT id, customer_name, invoice_date, total_amount, status
+                FROM sales_invoices WHERE customer_name = ? ORDER BY invoice_date DESC
+            ''', (customer_name,)).fetchall()
+        else:
+            rows = conn.execute('''
+                SELECT id, customer_name, invoice_date, total_amount, status
+                FROM sales_invoices ORDER BY customer_name, invoice_date DESC
+            ''').fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_customer_balance(customer_name):
+        conn = get_connection()
+        total = conn.execute(
+            "SELECT COALESCE(SUM(total_amount),0) FROM sales_invoices WHERE customer_name=?",
+            (customer_name,)).fetchone()[0]
+        paid = conn.execute(
+            "SELECT COALESCE(SUM(total_amount),0) FROM sales_invoices WHERE customer_name=? AND status='Paid'",
+            (customer_name,)).fetchone()[0]
+        conn.close()
+        return {'total': total, 'paid': paid, 'outstanding': total - paid}
+
+    @staticmethod
+    def get_supplier_statement(supplier_name=None):
+        conn = get_connection()
+        if supplier_name:
+            rows = conn.execute('''
+                SELECT id, supplier_name, invoice_date, total_amount, status
+                FROM purchase_invoices WHERE supplier_name = ? ORDER BY invoice_date DESC
+            ''', (supplier_name,)).fetchall()
+        else:
+            rows = conn.execute('''
+                SELECT id, supplier_name, invoice_date, total_amount, status
+                FROM purchase_invoices ORDER BY supplier_name, invoice_date DESC
+            ''').fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_supplier_balance(supplier_name):
+        conn = get_connection()
+        total = conn.execute(
+            "SELECT COALESCE(SUM(total_amount),0) FROM purchase_invoices WHERE supplier_name=?",
+            (supplier_name,)).fetchone()[0]
+        paid = conn.execute(
+            "SELECT COALESCE(SUM(total_amount),0) FROM purchase_invoices WHERE supplier_name=? AND status='Paid'",
+            (supplier_name,)).fetchone()[0]
+        conn.close()
+        return {'total': total, 'paid': paid, 'outstanding': total - paid}
+
+    @staticmethod
+    def get_all_customer_names():
+        conn = get_connection()
+        rows = conn.execute("SELECT DISTINCT customer_name FROM sales_invoices ORDER BY customer_name").fetchall()
+        names = conn.execute("SELECT name FROM customers ORDER BY name").fetchall()
+        conn.close()
+        all_names = list(set([r[0] for r in rows] + [n[0] for n in names]))
+        all_names.sort()
+        return all_names
+
+    @staticmethod
+    def get_all_supplier_names():
+        conn = get_connection()
+        rows = conn.execute("SELECT DISTINCT supplier_name FROM purchase_invoices ORDER BY supplier_name").fetchall()
+        names = conn.execute("SELECT name FROM suppliers ORDER BY name").fetchall()
+        conn.close()
+        all_names = list(set([r[0] for r in rows] + [n[0] for n in names]))
+        all_names.sort()
+        return all_names

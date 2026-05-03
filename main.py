@@ -10,6 +10,8 @@ from database import init_db
 from styles import APP_QSS
 from widgets import NavButton
 from pages import DashboardPage, RoomsPage, InventoryPage, ExpensesPage, ReportsPage
+from new_pages import SalesInvoicePage, PurchaseInvoicePage
+from acct_pages import AccountingPage, AccountStatementPage
 
 
 class AISApp(QMainWindow):
@@ -46,6 +48,10 @@ class AISApp(QMainWindow):
             ("🧃", "Snacks & Inventory"),
             ("💸", "Expenses"),
             ("📈", "Financial Reports"),
+            ("🧾", "Sales"),
+            ("📦", "Purchase"),
+            ("📒", "Accounting"),
+            ("📄", "Account Statements"),
         ]
         for icon, name in nav_items:
             btn = NavButton(icon, name)
@@ -55,7 +61,7 @@ class AISApp(QMainWindow):
 
         sb.addStretch()
 
-        info = QLabel("Multi-Activity Hub\nAccounting System v1.0")
+        info = QLabel("Multi-Activity Hub\nAccounting System v2.0")
         info.setObjectName("subtitle")
         info.setAlignment(Qt.AlignCenter)
         info.setStyleSheet("font-size:10px; color:#4a5068; padding:8px;")
@@ -73,13 +79,21 @@ class AISApp(QMainWindow):
         self.pg_inv = InventoryPage()
         self.pg_exp = ExpensesPage()
         self.pg_rep = ReportsPage()
+        self.pg_sales = SalesInvoicePage()
+        self.pg_purchase = PurchaseInvoicePage()
+        self.pg_acct = AccountingPage()
+        self.pg_stmt = AccountStatementPage()
 
         # Wire refresh callbacks
         self.pg_rooms._refresh_cb = self.refresh_all
         self.pg_inv._refresh_cb = self.refresh_all
         self.pg_exp._refresh_cb = self.refresh_all
+        self.pg_sales._refresh_cb = self.refresh_all
+        self.pg_purchase._refresh_cb = self.refresh_all
 
-        for pg in [self.pg_dash, self.pg_rooms, self.pg_inv, self.pg_exp, self.pg_rep]:
+        all_pages = [self.pg_dash, self.pg_rooms, self.pg_inv, self.pg_exp, self.pg_rep,
+                     self.pg_sales, self.pg_purchase, self.pg_acct, self.pg_stmt]
+        for pg in all_pages:
             self.stack.addWidget(pg.page)
 
         self.switch_page(0)
@@ -98,16 +112,10 @@ class AISApp(QMainWindow):
     def refresh_current(self, idx=None):
         if idx is None:
             idx = self.stack.currentIndex()
-        if idx == 0:
-            self.pg_dash.refresh()
-        elif idx == 1:
-            self.pg_rooms.refresh()
-        elif idx == 2:
-            self.pg_inv.refresh()
-        elif idx == 3:
-            self.pg_exp.refresh()
-        elif idx == 4:
-            self.pg_rep.refresh()
+        pages = [self.pg_dash, self.pg_rooms, self.pg_inv, self.pg_exp, self.pg_rep,
+                 self.pg_sales, self.pg_purchase, self.pg_acct, self.pg_stmt]
+        if 0 <= idx < len(pages):
+            pages[idx].refresh()
 
     def refresh_all(self):
         self.pg_dash.refresh()
