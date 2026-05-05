@@ -1,8 +1,9 @@
 """
-styles.py — Theme & QSS for the AIS Hub dark-mode UI.
+styles.py — Dark & Light themes for AIS Hub.
 """
 
-T = {
+# ── Dark Theme ────────────────────────────────────────────────
+DARK = {
     "bg":       "#0b0d14",
     "sidebar":  "#111320",
     "card":     "#161929",
@@ -20,7 +21,31 @@ T = {
     "hover":    "#1e2138",
 }
 
-APP_QSS = f"""
+# ── Light Theme ───────────────────────────────────────────────
+LIGHT = {
+    "bg":       "#f0f2f8",
+    "sidebar":  "#ffffff",
+    "card":     "#ffffff",
+    "card2":    "#f7f9ff",
+    "accent":   "#7c5cbf",
+    "accent2":  "#9b7ae0",
+    "text":     "#1a1d2e",
+    "sub":      "#7a869a",
+    "border":   "#e0e4f0",
+    "green":    "#1a9e65",
+    "red":      "#d63060",
+    "orange":   "#e67e22",
+    "blue":     "#2d7dd2",
+    "input_bg": "#f7f9ff",
+    "hover":    "#ede9f7",
+}
+
+# Default at startup
+T = DARK
+
+
+def _build_qss(T):
+    return f"""
 /* ── Base ─────────────────────────────────────────── */
 QMainWindow, QWidget#root {{ background:{T['bg']}; }}
 QWidget#sidebar {{ background:{T['sidebar']}; border-right:1px solid {T['border']}; }}
@@ -49,6 +74,13 @@ QPushButton#nav_btn:checked {{
         stop:0 {T['accent']}, stop:1 #6a4aad);
     color:#ffffff; font-weight:600;
 }}
+
+/* ── Icon/Util Buttons ────────────────────────────── */
+QPushButton#icon_btn {{
+    background:transparent; color:{T['sub']}; border:1px solid {T['border']};
+    border-radius:8px; padding:6px 12px; font-size:13px;
+}}
+QPushButton#icon_btn:hover {{ background:{T['hover']}; color:{T['text']}; }}
 
 /* ── Action Buttons ───────────────────────────────── */
 QPushButton#primary {{
@@ -90,6 +122,27 @@ QComboBox QAbstractItemView {{
     selection-background-color:{T['accent']}; selection-color:#fff;
     outline:none; padding:4px;
 }}
+
+/* ── Date / Time Inputs ───────────────────────────── */
+QDateEdit, QTimeEdit {{
+    background:{T['input_bg']}; color:{T['text']}; border:1px solid {T['border']};
+    border-radius:8px; padding:9px 14px; font-size:13px; font-family:'Segoe UI';
+}}
+QDateEdit:focus, QTimeEdit:focus {{ border:1px solid {T['accent']}; }}
+QDateEdit::drop-down, QTimeEdit::drop-down {{ border:none; width:24px; }}
+QCalendarWidget QAbstractItemView {{
+    background:{T['card']}; color:{T['text']};
+    selection-background-color:{T['accent']}; selection-color:#fff;
+}}
+QCalendarWidget QWidget {{ background:{T['sidebar']}; color:{T['text']}; }}
+QCalendarWidget QToolButton {{ color:{T['text']}; background:{T['sidebar']}; border:none; }}
+
+/* ── Progress Bar ─────────────────────────────────── */
+QProgressBar {{
+    border:none; border-radius:4px;
+    background:{T['border']}; max-height:10px;
+}}
+QProgressBar::chunk {{ background:{T['accent']}; border-radius:4px; }}
 
 /* ── Tables ───────────────────────────────────────── */
 QTableWidget {{
@@ -136,4 +189,24 @@ QMessageBox QPushButton {{
 QMessageBox QPushButton:hover {{
     background:{T['accent2']};
 }}
+
+/* ── Toast Notification ───────────────────────────── */
+QWidget#toast {{
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+        stop:0 {T['card']}, stop:1 {T['card2']});
+    border-radius:12px; border:1px solid {T['border']};
+}}
+QLabel#toast_title {{ font-size:13px; font-weight:700; color:{T['text']}; }}
+QLabel#toast_msg   {{ font-size:12px; color:{T['sub']}; }}
 """
+
+
+APP_QSS = _build_qss(DARK)
+
+
+def get_qss(theme='dark'):
+    return _build_qss(DARK if theme == 'dark' else LIGHT)
+
+
+def get_theme_colors(theme='dark'):
+    return DARK if theme == 'dark' else LIGHT
