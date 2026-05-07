@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import hashlib
 from datetime import datetime
 
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ais_hub.db')
@@ -222,6 +223,18 @@ def init_db():
         )
     ''')
 
+    # ── Users ────────────────────────────────────────────────────────────────
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT    NOT NULL UNIQUE,
+            password_hash TEXT    NOT NULL,
+            full_name     TEXT    NOT NULL,
+            role          TEXT    NOT NULL CHECK(role IN ('admin','employee')),
+            is_active     INTEGER NOT NULL DEFAULT 1
+        )
+    ''')
+
     conn.commit()
 
     # ── Full schema migration if needed ────────────────────────────────
@@ -262,6 +275,12 @@ def init_db():
     c.execute('SELECT COUNT(*) FROM products')
     if c.fetchone()[0] == 0:
         _seed_products(c)
+        conn.commit()
+
+    # Seed default users if empty
+    c.execute('SELECT COUNT(*) FROM users')
+    if c.fetchone()[0] == 0:
+        _seed_users(c)
         conn.commit()
 
     conn.close()
@@ -460,4 +479,17 @@ def _seed_settings(c):
         ('loyalty_redeem_rate',    '100'), # points needed per 1 EGP discount
     ]
     c.executemany("INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)", defaults)
+
+
+def _seed_users(c):
+    """Seed default users: admin and employee."""
+    def _h(pw): return hashlib.sha256(pw.encode()).hexdigest()
+    users = [
+        ('admin',    _h('admin123'), 'System Admin',  'admin'),
+        ('employee', _h('emp123'),   'Staff Member',  'employee'),
+    ]
+    c.executemany(
+        'INSERT INTO users (username, password_hash, full_name, role) VALUES (?,?,?,?)',
+        users
+    )
 

@@ -1,14 +1,16 @@
 """
 main.py — AIS Hub entry point with:
+  • Login System (Admin / Employee roles)
+  • Role-Based Access Control (RBAC)
   • Toast notification system
   • Dark / Light theme toggle
-  • AR / EN language toggle
   • Settings integration
 """
 import sys, os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QStackedWidget, QGraphicsOpacityEffect
+    QLabel, QPushButton, QStackedWidget, QGraphicsOpacityEffect,
+    QDialog, QFormLayout, QLineEdit,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont
@@ -16,15 +18,164 @@ from PyQt5.QtGui import QFont
 from database import init_db
 from styles import get_qss
 from widgets import NavButton
-from core import SettingsManager, NotificationManager
+from core import SettingsManager, NotificationManager, UserManager
 
-# Page imports — all in pages.py now
 from pages import (
     DashboardPage, RoomsPage, InventoryPage, ExpensesPage, ReportsPage,
     SalesInvoicePage, PurchaseInvoicePage,
     AccountingPage, AccountStatementPage,
     LoyaltyPage, SettingsPage, BookingPage,
 )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Login Dialog
+# ────────────────────────────────────────────────────────────────────────────
+class LoginDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("AIS Hub — Login")
+        self.setFixedSize(480, 420)
+        self.current_user = None
+        self._build()
+
+    def _build(self):
+        # ── Outer background ──────────────────────────────────────────────
+        self.setStyleSheet("""
+            QDialog { background-color: #0f1628; }
+
+            QLabel#lbl_title {
+                font-size: 28px; font-weight: 800;
+                color: #a78bfa; letter-spacing: 1px;
+            }
+            QLabel#lbl_sub {
+                font-size: 11px; color: #6a7a9a;
+            }
+            QLabel#lbl_field {
+                font-size: 12px; font-weight: 600; color: #c0cae0;
+            }
+            QLabel#lbl_error {
+                font-size: 11px; color: #f06292; font-weight: 600;
+            }
+            QLabel#lbl_hint {
+                font-size: 10px; color: #2e3a55;
+            }
+            QLineEdit {
+                background-color: #1a2340;
+                border: 1px solid #2e3f6a;
+                border-radius: 8px;
+                color: #e0e8ff;
+                font-size: 13px;
+                padding: 6px 12px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #7c5cbf;
+                background-color: #1e2a4a;
+            }
+            QPushButton#btn_login {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #7c5cbf, stop:1 #5c9cf5);
+                color: white;
+                font-size: 14px; font-weight: 700;
+                border-radius: 10px;
+                border: none;
+                padding: 10px;
+            }
+            QPushButton#btn_login:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #9b7fd4, stop:1 #78b0ff);
+            }
+            QPushButton#btn_login:pressed { opacity: 0.85; }
+        """)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(50, 40, 50, 36)
+        lay.setSpacing(0)
+
+        # ── Logo / Title ──────────────────────────────────────────────────
+        title = QLabel("🏢  AIS Hub")
+        title.setObjectName("lbl_title")
+        title.setAlignment(Qt.AlignCenter)
+        lay.addWidget(title)
+
+        lay.addSpacing(6)
+
+        sub = QLabel("Co-Working Space — Accounting Information System")
+        sub.setObjectName("lbl_sub")
+        sub.setAlignment(Qt.AlignCenter)
+        lay.addWidget(sub)
+
+        lay.addSpacing(28)
+
+        # ── Username ──────────────────────────────────────────────────────
+        u_lbl = QLabel("Username")
+        u_lbl.setObjectName("lbl_field")
+        lay.addWidget(u_lbl)
+        lay.addSpacing(6)
+        self.user_edit = QLineEdit()
+        self.user_edit.setPlaceholderText("Enter your username…")
+        self.user_edit.setFixedHeight(40)
+        lay.addWidget(self.user_edit)
+
+        lay.addSpacing(16)
+
+        # ── Password ──────────────────────────────────────────────────────
+        p_lbl = QLabel("Password")
+        p_lbl.setObjectName("lbl_field")
+        lay.addWidget(p_lbl)
+        lay.addSpacing(6)
+        self.pass_edit = QLineEdit()
+        self.pass_edit.setPlaceholderText("Enter your password…")
+        self.pass_edit.setEchoMode(QLineEdit.Password)
+        self.pass_edit.setFixedHeight(40)
+        lay.addWidget(self.pass_edit)
+
+        lay.addSpacing(12)
+
+        # ── Error label ───────────────────────────────────────────────────
+        self.error_lbl = QLabel("")
+        self.error_lbl.setObjectName("lbl_error")
+        self.error_lbl.setAlignment(Qt.AlignCenter)
+        self.error_lbl.setFixedHeight(18)
+        lay.addWidget(self.error_lbl)
+
+        lay.addSpacing(16)
+
+        # ── Login button ──────────────────────────────────────────────────
+        btn = QPushButton("  🔓   Login")
+        btn.setObjectName("btn_login")
+        btn.setFixedHeight(44)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(self._do_login)
+        lay.addWidget(btn)
+
+        lay.addSpacing(14)
+
+        # ── Hint ──────────────────────────────────────────────────────────
+        hint = QLabel("admin / admin123     •     employee / emp123")
+        hint.setObjectName("lbl_hint")
+        hint.setAlignment(Qt.AlignCenter)
+        lay.addWidget(hint)
+
+        lay.addStretch()
+
+        self.user_edit.returnPressed.connect(lambda: self.pass_edit.setFocus())
+        self.pass_edit.returnPressed.connect(self._do_login)
+
+    def _do_login(self):
+        username = self.user_edit.text().strip()
+        password = self.pass_edit.text()
+        if not username or not password:
+            self.error_lbl.setText("⚠  Please enter both username and password.")
+            return
+        user = UserManager.login(username, password)
+        if user:
+            self.current_user = user
+            self.accept()
+        else:
+            self.error_lbl.setText("❌  Invalid username or password.")
+            self.pass_edit.clear()
+            self.pass_edit.setFocus()
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -51,7 +202,6 @@ class Toast(QWidget):
         lay.setContentsMargins(14, 12, 14, 12)
         lay.setSpacing(4)
 
-        # Accent line
         bar = QWidget(); bar.setFixedHeight(3)
         bar.setStyleSheet(f"background:{color}; border-radius:2px;")
         lay.addWidget(bar)
@@ -72,14 +222,11 @@ class Toast(QWidget):
 
         self.adjustSize()
 
-        # Opacity animation
         self._effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._effect)
         self._anim = QPropertyAnimation(self._effect, b"opacity")
         self._anim.setDuration(400)
         self._anim.setEasingCurve(QEasingCurve.InOutQuad)
-
-        # Auto-close after 4.5s
         QTimer.singleShot(4500, self._fade_out)
 
     def show_at(self, x, y):
@@ -103,35 +250,40 @@ class Toast(QWidget):
 class AISApp(QMainWindow):
 
     NAV_KEYS = [
-        ("📊", "Dashboard"),
-        ("🏠", "Rooms & Sessions"),
-        ("📅", "Reservations"),
-        ("🧃", "Inventory"),
-        ("💸", "Expenses"),
-        ("📈", "Reports"),
-        ("🧾", "Sales"),
-        ("📦", "Purchase"),
-        ("📒", "Accounting"),
-        ("📄", "Statements"),
-        ("🎯", "Loyalty"),
-        ("⚙️", "Settings"),
+        ("📊", "Dashboard"),        # 0
+        ("🏠", "Rooms & Sessions"), # 1
+        ("📅", "Reservations"),     # 2
+        ("🧃", "Inventory"),        # 3
+        ("💸", "Expenses"),         # 4  ← Admin only
+        ("📈", "Reports"),          # 5  ← Admin only
+        ("🧾", "Sales"),            # 6
+        ("📦", "Purchase"),         # 7  ← Admin only
+        ("📒", "Accounting"),       # 8  ← Admin only
+        ("📄", "Statements"),       # 9  ← Admin only
+        ("🎯", "Loyalty"),          # 10
+        ("⚙️", "Settings"),        # 11 ← Admin only
     ]
 
-    def __init__(self):
+    # Pages hidden from Employee role
+    EMPLOYEE_HIDDEN = {4, 5, 7, 8, 9, 11}
+
+    def __init__(self, current_user):
         super().__init__()
+        self.current_user = current_user
+        self._logout_requested = False
+
         self.setWindowTitle("Co-Working Space AIS — Accounting Information System")
         self.resize(1300, 800)
         self.setMinimumSize(950, 650)
 
         init_db()
 
-        # Load saved theme
         self._theme = SettingsManager.get('theme', 'dark') or 'dark'
-
-        self._toast_y_offset = 0  # stack toasts
+        self._toast_y_offset = 0
 
         self._build_ui()
         self._apply_theme()
+        self._apply_role_restrictions()
 
     # ── UI construction ────────────────────────────────────────────────────
     def _build_ui(self):
@@ -162,7 +314,7 @@ class AISApp(QMainWindow):
 
         sb.addStretch()
 
-        # Theme toggle only
+        # Theme toggle
         self.theme_btn = QPushButton("🌙" if self._theme == 'dark' else "☀️")
         self.theme_btn.setObjectName("icon_btn")
         self.theme_btn.setFixedSize(44, 34)
@@ -171,10 +323,31 @@ class AISApp(QMainWindow):
         self.theme_btn.setToolTip("Toggle Dark / Light mode")
         sb.addWidget(self.theme_btn)
 
+        # ── User info + Logout ────────────────────────────────────────────
+        role = self.current_user['role']
+        role_icon = "🔴 Admin" if role == 'admin' else "🎫 Employee"
+
+        user_lbl = QLabel(f"👤 {self.current_user['full_name']}")
+        user_lbl.setStyleSheet("font-size:11px; font-weight:700; color:#9aa0b8; padding-top:8px;")
+        user_lbl.setAlignment(Qt.AlignCenter)
+        sb.addWidget(user_lbl)
+
+        role_lbl = QLabel(role_icon)
+        role_lbl.setStyleSheet("font-size:10px; color:#5a6a8a;")
+        role_lbl.setAlignment(Qt.AlignCenter)
+        sb.addWidget(role_lbl)
+
+        logout_btn = QPushButton("🚪 Logout")
+        logout_btn.setObjectName("danger")
+        logout_btn.setFixedHeight(30)
+        logout_btn.setCursor(Qt.PointingHandCursor)
+        logout_btn.clicked.connect(self.logout)
+        sb.addWidget(logout_btn)
+
         info = QLabel("Multi-Activity Hub\nAIS v3.0")
         info.setObjectName("subtitle")
         info.setAlignment(Qt.AlignCenter)
-        info.setStyleSheet("font-size:10px; color:#4a5068; padding:8px;")
+        info.setStyleSheet("font-size:10px; color:#4a5068; padding:4px;")
         sb.addWidget(info)
 
         main_h.addWidget(self.sidebar)
@@ -183,7 +356,6 @@ class AISApp(QMainWindow):
         self.stack = QStackedWidget()
         main_h.addWidget(self.stack)
 
-        # Build pages
         self.pg_dash     = DashboardPage()
         self.pg_rooms    = RoomsPage()
         self.pg_booking  = BookingPage()
@@ -197,7 +369,6 @@ class AISApp(QMainWindow):
         self.pg_loyalty  = LoyaltyPage()
         self.pg_settings = SettingsPage()
 
-        # Wire callbacks
         for pg in [self.pg_rooms, self.pg_inv, self.pg_exp,
                    self.pg_sales, self.pg_purchase, self.pg_booking]:
             pg._refresh_cb = self.refresh_all
@@ -212,20 +383,37 @@ class AISApp(QMainWindow):
 
         self.switch_page(0)
 
-        # Auto-refresh timer (every 5s — rooms, dashboard)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.auto_refresh)
         self.timer.start(5000)
 
-        # Notification timer (every 60s)
         self.notif_timer = QTimer(self)
         self.notif_timer.timeout.connect(self.check_notifications)
         self.notif_timer.start(60000)
-        # Run once after 3s on startup
         QTimer.singleShot(3000, self.check_notifications)
+
+    # ── Role Restrictions ──────────────────────────────────────────────────
+    def _apply_role_restrictions(self):
+        """Hide nav buttons and disable actions for 'employee' role."""
+        if self.current_user['role'] == 'admin':
+            return  # Full access
+
+        # Hide restricted nav buttons
+        for idx in self.EMPLOYEE_HIDDEN:
+            self.nav_btns[idx].hide()
+
+        # Inventory: view only — no price edit or delete
+        self.pg_inv.set_readonly(True)
+
+        # If somehow on a hidden page, go to dashboard
+        if self.stack.currentIndex() in self.EMPLOYEE_HIDDEN:
+            self.switch_page(0)
 
     # ── Navigation ─────────────────────────────────────────────────────────
     def switch_page(self, idx):
+        # Block employee from accessing restricted pages
+        if self.current_user['role'] == 'employee' and idx in self.EMPLOYEE_HIDDEN:
+            return
         for i, b in enumerate(self.nav_btns):
             b.setChecked(i == idx)
         self.stack.setCurrentIndex(idx)
@@ -262,6 +450,11 @@ class AISApp(QMainWindow):
     def _apply_theme(self):
         QApplication.instance().setStyleSheet(get_qss(self._theme))
 
+    # ── Logout ─────────────────────────────────────────────────────────────
+    def logout(self):
+        self._logout_requested = True
+        self.close()
+
     # ── Notifications ──────────────────────────────────────────────────────
     def check_notifications(self):
         try:
@@ -273,13 +466,11 @@ class AISApp(QMainWindow):
 
     def _show_toast(self, level, title, message):
         toast = Toast(level, title, message, parent=None)
-        # Position: bottom-right of window
         geo = self.geometry()
         x = geo.right() - toast.width() - 20
         y = geo.bottom() - 80 - self._toast_y_offset
         toast.show_at(x, y)
         self._toast_y_offset = (self._toast_y_offset + toast.height() + 10) % 300
-        # Reset offset after toast closes
         QTimer.singleShot(5200, lambda: self._reset_toast_offset())
 
     def _reset_toast_offset(self):
@@ -294,6 +485,22 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI", 10))
-    window = AISApp()
-    window.show()
-    sys.exit(app.exec_())
+
+    # Apply theme before showing login
+    app.setStyleSheet(get_qss('dark'))
+
+    while True:
+        login = LoginDialog()
+        if login.exec_() != QDialog.Accepted:
+            break
+
+        window = AISApp(login.current_user)
+        window.show()
+        app.exec_()
+
+        # If user clicked Logout → loop back to login
+        # If user closed the window normally → exit
+        if not window._logout_requested:
+            break
+
+    sys.exit(0)

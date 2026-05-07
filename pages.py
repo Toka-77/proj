@@ -267,11 +267,11 @@ class InventoryPage:
         rl.addLayout(f)
 
         btn_row = QHBoxLayout(); btn_row.setSpacing(8)
-        upd_btn = QPushButton("💾  Update Price"); upd_btn.setObjectName("primary")
-        upd_btn.setCursor(Qt.PointingHandCursor); upd_btn.clicked.connect(self.handle_update_price)
-        del_btn = QPushButton("🗑  Delete Product"); del_btn.setObjectName("danger")
-        del_btn.setCursor(Qt.PointingHandCursor); del_btn.clicked.connect(self.handle_delete_product)
-        btn_row.addWidget(upd_btn); btn_row.addWidget(del_btn)
+        self.upd_btn = QPushButton("💾  Update Price"); self.upd_btn.setObjectName("primary")
+        self.upd_btn.setCursor(Qt.PointingHandCursor); self.upd_btn.clicked.connect(self.handle_update_price)
+        self.del_btn = QPushButton("🗑  Delete Product"); self.del_btn.setObjectName("danger")
+        self.del_btn.setCursor(Qt.PointingHandCursor); self.del_btn.clicked.connect(self.handle_delete_product)
+        btn_row.addWidget(self.upd_btn); btn_row.addWidget(self.del_btn)
         rl.addLayout(btn_row)
         rl.addStretch()
         grid.addWidget(right, 2)
@@ -330,6 +330,15 @@ class InventoryPage:
                 if self._refresh_cb: self._refresh_cb()
             else:
                 QMessageBox.warning(self.page, "Error", msg)
+
+    def set_readonly(self, readonly: bool):
+        """Disable price editing and delete — called for Employee role."""
+        self.upd_btn.setEnabled(not readonly)
+        self.del_btn.setEnabled(not readonly)
+        self.new_price.setEnabled(not readonly)
+        if readonly:
+            self.upd_btn.setToolTip("🔒 Admin only")
+            self.del_btn.setToolTip("🔒 Admin only")
 
 # ═══════════════════════════════════════════════════════════════
 #  EXPENSES

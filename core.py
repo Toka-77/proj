@@ -2,6 +2,7 @@
 core.py - Business logic layer for the AIS Hub system.
 Implements: RoomManager, SessionManager, InventoryManager, ExpenseManager, ReportManager
 """
+import hashlib
 from database import get_connection
 from datetime import datetime
 
@@ -1477,3 +1478,62 @@ class PDFGenerator:
         path = os.path.join(out_dir, f'invoice_PI{invoice_id:04d}.pdf')
         pdf.output(path)
         return True, path
+
+
+# ────────────────────────────────────────────────────────────────────────────
+#  User Manager — Login / RBAC
+# ────────────────────────────────────────────────────────────────────────────
+class UserManager:
+
+    @staticmethod
+    def _hash(password: str) -> str:
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    @staticmethod
+    def login(username: str, password: str):
+        """Returns user dict {id, username, full_name, role} or None."""
+        pw_hash = UserManager._hash(password)
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT id, username, full_name, role FROM users "
+            "WHERE username=? AND password_hash=? AND is_active=1",
+            (username, pw_hash)
+        ).fetchone()
+        conn.close()
+        if row:
+            return {'id': row[0], 'username': row[1], 'full_name': row[2], 'role': row[3]}
+        return None
+
+    @staticmethod
+    def get_all_users():
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT id, username, full_name, role, is_active FROM users ORDER BY role, username"
+        ).fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def add_user(username, password, full_name, role):
+        pw_hash = UserManager._hash(password)
+        conn = get_connection()
+        try:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, full_name, role) VALUES (?,?,?,?)",
+                (username, pw_hash, full_name, role)
+            )
+            conn.commit()
+            conn.close()
+            return True, f"User '{username}' created."
+        except Exception as e:
+            conn.close()
+            return False, str(e)
+
+    @staticmethod
+    def change_password(username, new_password):
+        pw_hash = UserManager._hash(new_password)
+        conn = get_connection()
+        conn.execute("UPDATE users SET password_hash=? WHERE username=?", (pw_hash, username))
+        conn.commit()
+        conn.close()
+        return True, "Password updated."
