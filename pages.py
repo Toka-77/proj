@@ -97,7 +97,15 @@ class RoomsPage:
         ll = QVBoxLayout(left); ll.setContentsMargins(16,16,16,16)
         ll.addWidget(QLabel("All Rooms", objectName="sec_title"))
         self.rooms_tbl = make_table(["#","Name","Type","Status","Price/hr","Capacity"])
+        self.rooms_tbl.itemSelectionChanged.connect(self._on_room_select)
         ll.addWidget(self.rooms_tbl)
+        
+        edit_btn = QPushButton("✏️ Edit Selected Room Price")
+        edit_btn.setObjectName("secondary")
+        edit_btn.setCursor(Qt.PointingHandCursor)
+        edit_btn.clicked.connect(self.handle_edit_room)
+        ll.addWidget(edit_btn)
+        
         grid.addWidget(left, 3)
 
         right = QWidget(); right.setObjectName("card")
@@ -140,8 +148,18 @@ class RoomsPage:
 
         self._refresh_cb = None
 
+    def _on_room_select(self):
+        row = self.rooms_tbl.currentRow()
+        if row < 0 or row >= len(getattr(self, '_room_ids', [])): return
+        rid = self._room_ids[row]
+        for i in range(self.start_room.count()):
+            if self.start_room.itemData(i) == rid:
+                self.start_room.setCurrentIndex(i)
+                break
+
     def refresh(self):
         rooms = RoomManager.get_all_rooms()
+        self._room_ids = [r[0] for r in rooms]
         self.rooms_tbl.setRowCount(len(rooms))
         self.start_room.clear()
         for i, r in enumerate(rooms):
@@ -222,6 +240,20 @@ class RoomsPage:
             if self._refresh_cb: self._refresh_cb()
         else:
             QMessageBox.warning(self.page, "Error", res)
+
+    def handle_edit_room(self):
+        from PyQt5.QtWidgets import QInputDialog
+        row = self.rooms_tbl.currentRow()
+        if row < 0 or row >= len(self._room_ids):
+            return QMessageBox.warning(self.page, "Error", "Select a room from the table first.")
+        rid = self._room_ids[row]
+        rname = self.rooms_tbl.item(row, 1).text()
+        curr_price = float(self.rooms_tbl.item(row, 4).text())
+        
+        new_price, ok = QInputDialog.getDouble(self.page, "Edit Room Price", f"Enter new hourly price for {rname}:", curr_price, 0, 10000, 2)
+        if ok:
+            RoomManager.update_price(rid, new_price)
+            self.refresh()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -511,7 +543,24 @@ class SalesInvoicePage:
         ll = QVBoxLayout(left); ll.setContentsMargins(16,16,16,16)
         ll.addWidget(QLabel("📋  Sales Invoices", objectName="sec_title"))
         self.inv_tbl = make_table(["#","Customer","Date","Total","Status"])
+        self.inv_tbl.itemSelectionChanged.connect(self._on_inv_select)
         ll.addWidget(self.inv_tbl)
+        
+        self.detail_card = QWidget()
+        dl = QVBoxLayout(self.detail_card)
+        dl.setContentsMargins(0,10,0,0)
+        self.detail_title = QLabel("Invoice Details")
+        self.detail_title.setObjectName("sec_title")
+        self.detail_info = QLabel("")
+        self.detail_info.setStyleSheet("color:#6a7a9a; font-size:12px; margin-bottom:4px;")
+        self.detail_tbl = make_table(["Product","Qty","Price","Total"])
+        self.detail_tbl.setMaximumHeight(100)
+        dl.addWidget(self.detail_title)
+        dl.addWidget(self.detail_info)
+        dl.addWidget(self.detail_tbl)
+        ll.addWidget(self.detail_card)
+        self.detail_card.hide()
+
         row = QHBoxLayout()
         del_btn = QPushButton("🗑 Delete"); del_btn.setObjectName("danger")
         del_btn.setCursor(Qt.PointingHandCursor); del_btn.clicked.connect(self.handle_delete)
@@ -611,6 +660,23 @@ class SalesInvoicePage:
         total = sum(e['qty'].value() * e['price'].value() for e in self.item_rows)
         self.total_lbl.setText(f"Total: {total:.2f} EGP")
 
+    def _on_inv_select(self):
+        row = self.inv_tbl.currentRow()
+        if row < 0 or row >= len(self._inv_ids):
+            self.detail_card.hide(); return
+        iid = self._inv_ids[row]
+        cust = self.inv_tbl.item(row, 1).text()
+        date = self.inv_tbl.item(row, 2).text()
+        tot  = self.inv_tbl.item(row, 3).text()
+        stat = self.inv_tbl.item(row, 4).text()
+        self.detail_title.setText(f"Invoice #{row+1}  —  {cust}")
+        self.detail_info.setText(f"Date: {date}   Total: {tot} EGP   Status: {stat}")
+        items = SalesInvoiceManager.get_invoice_items(iid)
+        self.detail_tbl.setRowCount(len(items))
+        for i, (name, qty, price, total) in enumerate(items):
+            set_row(self.detail_tbl, i, [name, qty, f"{price:.2f}", f"{total:.2f}"])
+        self.detail_card.show()
+
     def refresh(self):
         self.sess_combo.clear()
         self.sess_combo.addItem("None (no session)", None)
@@ -624,6 +690,7 @@ class SalesInvoicePage:
             set_row(self.inv_tbl, i, [f"#{i+1}", inv[1], inv[2], f"{inv[3]:.2f}", inv[4]])
             si = self.inv_tbl.item(i, 4)
             if si: si.setForeground(QColor("#3ecf8e") if inv[4]=="Paid" else QColor("#ffa726"))
+        self.detail_card.hide()
 
         for entry in self.item_rows:
             entry['prod'].clear()

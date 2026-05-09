@@ -76,6 +76,14 @@ class RoomManager:
         conn.close()
 
     @staticmethod
+    def update_price(room_id, new_price):
+        conn = get_connection()
+        conn.execute("UPDATE rooms SET base_price=? WHERE id=?", (new_price, room_id))
+        conn.commit()
+        conn.close()
+        return True
+
+    @staticmethod
     def live_status():
         """Returns a dict mapping room_id → {'name','type','status','base_price','capacity'}"""
         rooms = RoomManager.get_all_rooms()
@@ -88,7 +96,7 @@ class RoomManager:
 class SessionManager:
 
     @staticmethod
-    def start_session(room_id, customer_name, num_people=1, notes='', deposit=0.0):
+    def start_session(room_id, customer_name, num_people=1, notes='', deposit=0.0, is_conversion=False):
         conn = get_connection()
         # Verify room is available
         row = conn.execute("SELECT status FROM rooms WHERE id=?", (room_id,)).fetchone()
@@ -106,8 +114,18 @@ class SessionManager:
             (room_id, cname, num_people, start_time, notes, deposit)
         )
         conn.execute("UPDATE rooms SET status='Occupied' WHERE id=?", (room_id,))
-        conn.commit()
         sid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        if deposit > 0 and not is_conversion:
+            conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                         (start_time, f"Deposit for Session #{sid}", f"DEP-{sid}"))
+            je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Cash', deposit, 0))
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Unearned Revenue', 0, deposit))
+
+        conn.commit()
         conn.close()
         return sid, f"Session #{sid} started for '{cname}'."
 
@@ -137,7 +155,8 @@ class SessionManager:
         if not row:
             return 0.0
         start = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
-        return max((datetime.now() - start).total_seconds() / 3600, 0)
+        elapsed = (datetime.now() - start).total_seconds() / 3600.0
+        return max(elapsed, 1.0)
 
     @staticmethod
     def end_session(session_id, discount=0.0, promo_code='', notes=''):
@@ -157,8 +176,8 @@ class SessionManager:
         end_dt = datetime.now()
 
         duration_hours = (end_dt - start_dt).total_seconds() / 3600.0
-        # Minimum 30 minutes billing
-        duration_hours = max(duration_hours, 0.5)
+        # Minimum 1 hour billing
+        duration_hours = max(duration_hours, 1.0)
 
         room_charge = calculate_room_charge(room_type, base_price, duration_hours, num_people)
 
@@ -177,6 +196,34 @@ class SessionManager:
             WHERE id=?
         ''', (end_str, room_charge, snacks_total, discount, promo_code, total_bill, notes, session_id))
         conn.execute("UPDATE rooms SET status='Available' WHERE id=?", (room_id,))
+
+        # Create Journal Entry for the session billing
+        conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                     (end_str, f"Session #{session_id} billing", f"SESS-{session_id}"))
+        je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        net_room_revenue = max(room_charge - discount, 0.0)
+
+        # Debit Cash for what they pay now
+        if total_bill > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Cash', total_bill, 0))
+
+        # Debit Unearned Revenue for the deposit they paid earlier
+        if deposit > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Unearned Revenue', deposit, 0))
+
+        # Credit Room Revenue
+        if net_room_revenue > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Room Revenue', 0, net_room_revenue))
+
+        # Credit Sales Revenue (for snacks)
+        if snacks_total > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Sales Revenue', 0, snacks_total))
+
         conn.commit()
         conn.close()
 
@@ -319,14 +366,15 @@ class InventoryManager:
         """Deduct stock and record sale. Used for session-linked snack sales."""
         conn = get_connection()
         row = conn.execute(
-            "SELECT name, quantity, selling_price FROM products WHERE sku=?", (product_sku,)
+            "SELECT name, quantity, unit_cost, selling_price FROM products WHERE sku=?", (product_sku,)
         ).fetchone()
         if not row:
             conn.close(); return False, "Product not found."
-        name, stock, price = row
+        name, stock, unit_cost, price = row
         if stock < quantity:
             conn.close(); return False, f"Not enough stock. Available: {stock}"
         total_price = round(price * quantity, 2)
+        cogs_total = round(unit_cost * quantity, 2)
         sale_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute("UPDATE products SET quantity = quantity - ? WHERE sku=?", (quantity, product_sku))
         conn.execute(
@@ -334,6 +382,26 @@ class InventoryManager:
             "VALUES (?,?,?,?,?,?)",
             (product_sku, session_id, quantity, price, total_price, sale_time)
         )
+        
+        # Record COGS and Inventory reduction
+        conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                     (sale_time, f"COGS for {quantity}x {name}", f"COGS-{product_sku}"))
+        je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Cost of Goods Sold', cogs_total, 0))
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Inventory', 0, cogs_total))
+
+        # If it's a direct sale (no session), also record Revenue and Cash
+        if not session_id:
+            conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                         (sale_time, f"Direct Sale {quantity}x {name}", f"DSALE-{product_sku}"))
+            je_id2 = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id2, 'Cash', total_price, 0))
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id2, 'Sales Revenue', 0, total_price))
+
         conn.commit(); conn.close()
         return True, f"Sold {quantity}× {name} → {total_price:.2f} EGP"
 
@@ -368,6 +436,7 @@ class ExpenseManager:
             "INSERT INTO expenses (category, amount, date, description) VALUES (?,?,?,?)",
             (category, amount, date, description)
         )
+        exp_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         
         # Map category to GL account
         account = 'Other Expenses'
@@ -377,7 +446,7 @@ class ExpenseManager:
         elif category == 'Supplies': account = 'Supplies Expense'
 
         conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
-                     (date, f"Expense: {category} - {description}", "EXP"))
+                     (date, f"Expense: {category} - {description}", f"EXP-{exp_id}"))
         je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
                      (je_id, account, amount, 0))
@@ -408,6 +477,14 @@ class ExpenseManager:
     def delete_expense(expense_id):
         conn = get_connection()
         conn.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
+        
+        # Find and delete associated Journal Entry
+        je_id_row = conn.execute("SELECT id FROM journal_entries WHERE reference=?", (f"EXP-{expense_id}",)).fetchone()
+        if je_id_row:
+            je_id = je_id_row[0]
+            conn.execute("DELETE FROM journal_lines WHERE entry_id=?", (je_id,))
+            conn.execute("DELETE FROM journal_entries WHERE id=?", (je_id,))
+            
         conn.commit()
         conn.close()
         return True, "Expense deleted."
@@ -451,7 +528,6 @@ class ReportManager:
             "SELECT COALESCE(SUM(discount), 0) FROM sessions WHERE end_time IS NOT NULL AND end_time >= ?", (start_date,)
         ).fetchone()[0]
 
-        from core import AccountingManager
         inc = AccountingManager.get_income_statement()
         total_revenue = inc['total_revenue']
         total_exp = inc['total_expenses']
@@ -482,10 +558,10 @@ class ReportManager:
         # Inventory value
         inv_value = conn.execute("SELECT COALESCE(SUM(quantity*selling_price),0) FROM products").fetchone()[0]
 
-        # Products sold today
+        # Products sold today (after last year close)
         today = datetime.now().strftime('%Y-%m-%d')
         sold_today = conn.execute(
-            "SELECT COALESCE(SUM(total_price),0) FROM sales WHERE sale_time LIKE ?", (f"{today}%",)
+            "SELECT COALESCE(SUM(total_price),0) FROM sales WHERE sale_time LIKE ? AND sale_time >= ?", (f"{today}%", start_date)
         ).fetchone()[0]
 
         conn.close()
@@ -685,8 +761,23 @@ class SalesInvoiceManager:
     @staticmethod
     def delete_invoice(invoice_id):
         conn = get_connection()
+        # Reverse inventory
+        items = conn.execute("SELECT product_sku, quantity FROM sales_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
+        for sku, qty in items:
+            conn.execute("UPDATE products SET quantity = quantity + ? WHERE sku=?", (qty, sku))
+            
         conn.execute("DELETE FROM sales_invoice_items WHERE invoice_id=?", (invoice_id,))
         conn.execute("DELETE FROM sales_invoices WHERE id=?", (invoice_id,))
+        
+        # Delete Journal Entries
+        refs = [f"SI-REV-{invoice_id}", f"SI-COGS-{invoice_id}", f"PAY-SI-{invoice_id}"]
+        for ref in refs:
+            je_id_row = conn.execute("SELECT id FROM journal_entries WHERE reference=?", (ref,)).fetchone()
+            if je_id_row:
+                je_id = je_id_row[0]
+                conn.execute("DELETE FROM journal_lines WHERE entry_id=?", (je_id,))
+                conn.execute("DELETE FROM journal_entries WHERE id=?", (je_id,))
+                
         conn.commit()
         conn.close()
         return True, "Invoice deleted."
@@ -810,8 +901,23 @@ class PurchaseInvoiceManager:
     @staticmethod
     def delete_invoice(invoice_id):
         conn = get_connection()
+        # Reverse inventory
+        items = conn.execute("SELECT product_sku, quantity FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
+        for sku, qty in items:
+            conn.execute("UPDATE products SET quantity = quantity - ? WHERE sku=?", (qty, sku))
+            
         conn.execute("DELETE FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,))
         conn.execute("DELETE FROM purchase_invoices WHERE id=?", (invoice_id,))
+        
+        # Delete Journal Entries
+        refs = [f"PI-{invoice_id}", f"PAY-PI-{invoice_id}"]
+        for ref in refs:
+            je_id_row = conn.execute("SELECT id FROM journal_entries WHERE reference=?", (ref,)).fetchone()
+            if je_id_row:
+                je_id = je_id_row[0]
+                conn.execute("DELETE FROM journal_lines WHERE entry_id=?", (je_id,))
+                conn.execute("DELETE FROM journal_entries WHERE id=?", (je_id,))
+                
         conn.commit()
         conn.close()
         return True, "Invoice deleted."
@@ -924,12 +1030,21 @@ class AccountingManager:
     def get_trial_balance():
         conn = get_connection()
         rows = conn.execute('''
-            SELECT jl.account, SUM(jl.debit) as total_dr, SUM(jl.credit) as total_cr
+            SELECT jl.account, SUM(jl.debit) - SUM(jl.credit) as net_balance
             FROM journal_lines jl
-            GROUP BY jl.account ORDER BY jl.account
+            GROUP BY jl.account 
+            HAVING ROUND(net_balance, 2) != 0
+            ORDER BY jl.account
         ''').fetchall()
         conn.close()
-        return rows
+        
+        formatted_rows = []
+        for account, net in rows:
+            if net > 0:
+                formatted_rows.append((account, net, 0.0))
+            else:
+                formatted_rows.append((account, 0.0, abs(net)))
+        return formatted_rows
 
     @staticmethod
     def get_income_statement():
@@ -1332,9 +1447,16 @@ class BookingManager:
     @staticmethod
     def cancel_booking(booking_id):
         conn = get_connection()
-        conn.execute("UPDATE bookings SET status='Cancelled' WHERE id=?", (booking_id,))
+        row = conn.execute("SELECT deposit, status FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        if row and row[1] != 'Cancelled':
+            deposit = row[0]
+            conn.execute("UPDATE bookings SET status='Cancelled' WHERE id=?", (booking_id,))
+            if deposit > 0:
+                date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                lines = [('Unearned Revenue', deposit, 0.0), ('Cash', 0.0, deposit)]
+                AccountingManager.create_journal_entry("Booking Cancelled (Refund)", lines, f"BK-CANC-{booking_id}", "System")
         conn.commit(); conn.close()
-        return True, "Booking cancelled."
+        return True, "Booking cancelled and deposit refunded (if any)."
 
     @staticmethod
     def convert_to_session(booking_id):
@@ -1348,7 +1470,7 @@ class BookingManager:
         room_id, cname, num_people, notes, deposit = row
         conn.execute("UPDATE bookings SET status='Completed' WHERE id=?", (booking_id,))
         conn.commit(); conn.close()
-        sid, msg = SessionManager.start_session(room_id, cname, num_people, notes, deposit)
+        sid, msg = SessionManager.start_session(room_id, cname, num_people, notes, deposit, is_conversion=True)
         return (True, msg) if sid else (False, msg)
 
 
