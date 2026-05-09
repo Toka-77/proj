@@ -604,15 +604,19 @@ class SalesInvoiceManager:
         )
         inv_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         for psku, qty, price in items:
+            c_row = conn.execute("SELECT unit_cost FROM products WHERE sku=?", (psku,)).fetchone()
+            unit_cost = c_row[0] if c_row else 0.0
+            sold_below = bool(price < unit_cost)
+
             conn.execute(
-                "INSERT INTO sales_invoice_items (invoice_id, product_sku, quantity, unit_price, total) VALUES (?,?,?,?,?)",
-                (inv_id, psku, qty, price, qty * price)
+                "INSERT INTO sales_invoice_items (invoice_id, product_sku, quantity, unit_price, total, sold_below_cost) VALUES (?,?,?,?,?,?)",
+                (inv_id, psku, qty, price, qty * price, sold_below)
             )
             conn.execute("UPDATE products SET quantity = quantity - ? WHERE sku=?", (qty, psku))
             conn.execute(
-                "INSERT INTO sales (product_sku, session_id, qty_sold, unit_price, total_price, sale_time) "
-                "VALUES (?,?,?,?,?,?)",
-                (psku, session_id, qty, price, round(qty * price, 2), date)
+                "INSERT INTO sales (product_sku, session_id, qty_sold, unit_price, total_price, sale_time, sold_below_cost) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (psku, session_id, qty, price, round(qty * price, 2), date, sold_below)
             )
         conn.execute(
             "INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",

@@ -93,9 +93,16 @@ def init_db():
             unit_price  REAL    NOT NULL,
             total_price REAL    NOT NULL,
             sale_time   DATETIME NOT NULL,
+            sold_below_cost BOOLEAN DEFAULT FALSE,
             FOREIGN KEY(session_id) REFERENCES sessions(id)
         )
     ''')
+    
+    # Add sold_below_cost to sales if it doesn't exist
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN sold_below_cost BOOLEAN DEFAULT FALSE")
+    except Exception:
+        pass
 
     # ── Expenses ─────────────────────────────────────────────────────────────
     c.execute('''
@@ -128,9 +135,16 @@ def init_db():
             quantity    INTEGER NOT NULL DEFAULT 1,
             unit_price  REAL    NOT NULL,
             total       REAL    NOT NULL,
+            sold_below_cost BOOLEAN DEFAULT FALSE,
             FOREIGN KEY(invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE
         )
     ''')
+
+    # Add sold_below_cost to sales_invoice_items if it doesn't exist
+    try:
+        conn.execute("ALTER TABLE sales_invoice_items ADD COLUMN sold_below_cost BOOLEAN DEFAULT FALSE")
+    except Exception:
+        pass
 
     # ── Purchase Invoices ────────────────────────────────────────────────────
     c.execute('''
@@ -398,19 +412,20 @@ def _seed_data(c):
 def _seed_products(c):
     """Seed default products with new schema (sku PK)."""
     products = [
-        ('P001', 'Pepsi Can',    'Drinks',  15.0, 50),
-        ('P002', 'Mirinda',      'Drinks',  15.0, 40),
-        ('P003', 'Water Bottle', 'Drinks',   5.0, 100),
-        ('P004', 'Lays Classic', 'Snacks',  12.0, 30),
-        ('P005', 'Doritos',      'Snacks',  15.0, 25),
-        ('P006', 'Kit-Kat',      'Snacks',  10.0, 40),
-        ('P007', 'Coffee',       'Hot',     30.0, 100),
-        ('P008', 'Tea',          'Hot',     20.0, 80),
-        ('P009', 'Cappuccino',   'Hot',     40.0, 60),
-        ('P010', 'Popcorn',      'Snacks',  20.0, 50),
+        # sku, name, category, unit_cost, selling_price, quantity
+        ('P001', 'Pepsi Can',    'Drinks',  10.0, 15.0, 50),
+        ('P002', 'Mirinda',      'Drinks',  10.0, 15.0, 40),
+        ('P003', 'Water Bottle', 'Drinks',   3.0,  5.0, 100),
+        ('P004', 'Lays Classic', 'Snacks',   8.0, 12.0, 30),
+        ('P005', 'Doritos',      'Snacks',  10.0, 15.0, 25),
+        ('P006', 'Kit-Kat',      'Snacks',   7.0, 10.0, 40),
+        ('P007', 'Coffee',       'Hot',     15.0, 30.0, 100),
+        ('P008', 'Tea',          'Hot',     10.0, 20.0, 80),
+        ('P009', 'Cappuccino',   'Hot',     20.0, 40.0, 60),
+        ('P010', 'Popcorn',      'Snacks',  12.0, 20.0, 50),
     ]
     c.executemany(
-        'INSERT INTO products (sku, name, category, selling_price, quantity) VALUES (?,?,?,?,?)',
+        'INSERT INTO products (sku, name, category, unit_cost, selling_price, quantity) VALUES (?,?,?,?,?,?)',
         products
     )
 

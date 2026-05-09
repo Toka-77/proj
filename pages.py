@@ -248,8 +248,8 @@ class InventoryPage:
         right = QWidget(); right.setObjectName("card")
         rl = QVBoxLayout(right); rl.setContentsMargins(16,16,20,20); rl.setSpacing(14)
 
-        rl.addWidget(QLabel("✏️  Edit Selling Price", objectName="sec_title"))
-        note = QLabel("Select a product row, then update its selling price here.")
+        rl.addWidget(QLabel("✏️  Edit Price & Cost", objectName="sec_title"))
+        note = QLabel("Select a product row, then update its selling price and cost.")
         note.setStyleSheet("color:#6a7a9a; font-size:11px;"); note.setWordWrap(True)
         rl.addWidget(note)
 
@@ -257,10 +257,12 @@ class InventoryPage:
         self.sel_sku  = QLineEdit(); self.sel_sku.setReadOnly(True)
         self.sel_sku.setPlaceholderText("Auto-filled on row select")
         self.sel_name = QLineEdit(); self.sel_name.setReadOnly(True)
+        self.new_cost = QDoubleSpinBox(); self.new_cost.setMaximum(99999); self.new_cost.setPrefix("EGP ")
         self.new_price = QDoubleSpinBox(); self.new_price.setMaximum(99999); self.new_price.setPrefix("EGP ")
         f.addRow("SKU:",       self.sel_sku)
         f.addRow("Product:",   self.sel_name)
-        f.addRow("New Price:", self.new_price)
+        f.addRow("Unit Cost:", self.new_cost)
+        f.addRow("Sale Price:", self.new_price)
         rl.addLayout(f)
 
         btn_row = QHBoxLayout(); btn_row.setSpacing(8)
@@ -281,6 +283,8 @@ class InventoryPage:
         if row < 0: return
         self.sel_sku.setText(self.prod_tbl.item(row, 0).text())
         self.sel_name.setText(self.prod_tbl.item(row, 1).text())
+        try:    self.new_cost.setValue(float(self.prod_tbl.item(row, 3).text()))
+        except: pass
         try:    self.new_price.setValue(float(self.prod_tbl.item(row, 4).text()))
         except: pass
 
@@ -332,9 +336,12 @@ class InventoryPage:
         self.upd_btn.setEnabled(not readonly)
         self.del_btn.setEnabled(not readonly)
         self.new_price.setEnabled(not readonly)
+        self.new_cost.setEnabled(not readonly)
         if readonly:
             self.upd_btn.setToolTip("🔒 Admin only")
             self.del_btn.setToolTip("🔒 Admin only")
+            self.new_price.setToolTip("🔒 Admin only — price editing restricted")
+            self.new_cost.setToolTip("🔒 Admin only — cost editing restricted")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -455,7 +462,12 @@ class ReportsPage:
         p = rep['profit']
         self.r_prof.update_value(f"{abs(p):,.2f} EGP", "#3ecf8e" if p >= 0 else "#f06292")
         self.r_prof.update_title("Net Profit" if p >= 0 else "Net Loss")
-        self.r_top.update_value(f"{rep['most_used_room']} ({rep['most_used_count']})")
+        top_room = rep['most_used_room']
+        top_count = rep['most_used_count']
+        if top_room == 'No Data':
+            self.r_top.update_value("0 sessions")
+        else:
+            self.r_top.update_value(f"{top_room} ({top_count})")
         self.r_sess.update_value(rep['total_sessions'])
         self.r_active.update_value(rep['active_sessions'])
         self.r_inv.update_value("0 EGP")
@@ -577,7 +589,8 @@ class SalesInvoicePage:
             if cb.count() == 0:
                 cb.blockSignals(True)
                 for p in prods:
-                    cb.addItem(f"{p[1]}  [stock: {p[5]}]", (p[0], p[4]))
+                    # p = (sku, name, category, unit_cost, selling_price, quantity)
+                    cb.addItem(f"{p[1]}  [stock: {p[5]}]", (p[0], p[4], p[3]))
                 cb.blockSignals(False)
                 if cb.count() > 0:
                     data = cb.currentData()
@@ -611,13 +624,51 @@ class SalesInvoicePage:
         if not cust: return QMessageBox.warning(self.page, "Error", "Enter customer name.")
         session_id = self.sess_combo.currentData()
         items = []
+        requires_override = False
+        override_msg = ""
         for e in self.item_rows:
             data = e['prod'].currentData()
             if not data: continue
-            if e['price'].value() <= 0:
+            
+            sku = data[0]
+            unit_cost = data[2] if len(data) > 2 else 0.0
+            price = e['price'].value()
+
+            if price <= 0:
                 return QMessageBox.warning(self.page, "Invalid Price",
                     f"Price for '{e['prod'].currentText().split('[')[0].strip()}' must be > 0 EGP.")
-            items.append((data[0], e['qty'].value(), e['price'].value()))
+            
+            if price < unit_cost:
+                requires_override = True
+                override_msg += f"\n- {e['prod'].currentText().split('[')[0].strip()} (Cost: {unit_cost:.2f}, Price: {price:.2f})"
+                
+            items.append((sku, e['qty'].value(), price))
+
+        if requires_override:
+            reply = QMessageBox.warning(self.page, "Warning - Below Cost", 
+                f"The following items are priced below their cost:{override_msg}\n\nDo you want to proceed?", 
+                QMessageBox.Yes | QMessageBox.No)
+            if reply != QMessageBox.Yes: return
+
+            main_win = self.page.window()
+            is_admin = False
+            if hasattr(main_win, 'current_user') and main_win.current_user:
+                if main_win.current_user['role'] == 'admin':
+                    is_admin = True
+            
+            if not is_admin:
+                from PyQt5.QtWidgets import QInputDialog, QLineEdit
+                pwd, ok = QInputDialog.getText(self.page, "Manager Override", "Enter Admin Password to authorize selling below cost:", QLineEdit.Password)
+                if not ok or not pwd: return
+                
+                import hashlib
+                pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
+                conn = database.get_connection()
+                admin_user = conn.execute("SELECT id FROM users WHERE role='admin' AND password_hash=?", (pw_hash,)).fetchone()
+                conn.close()
+                if not admin_user:
+                    return QMessageBox.warning(self.page, "Error", "Invalid admin password! Transaction blocked.")
+                    
         if not items: return QMessageBox.warning(self.page, "Error", "Add at least one product.")
         ok, msg = SalesInvoiceManager.create_invoice(cust, items, session_id=session_id)
         if ok:
@@ -738,10 +789,10 @@ class PurchaseInvoicePage:
             if width: lbl.setFixedWidth(width)
             hdr_l.addWidget(lbl, stretch)
         _hdr("Product Name", stretch=2)
-        _hdr("Category",  width=72)
-        _hdr("Qty",       width=56)
-        _hdr("Cost (EGP)",width=110)
-        _hdr("Sale (EGP)",width=110)
+        _hdr("Category",  width=90)
+        _hdr("Qty",       width=72)
+        _hdr("Cost (EGP)",width=130)
+        _hdr("Sale (EGP)",width=130)
         rl.addWidget(hdr)
 
         self.item_rows = []
@@ -776,12 +827,12 @@ class PurchaseInvoicePage:
         row_w = QWidget()
         hl = QHBoxLayout(row_w); hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
 
-        name_fld  = QLineEdit();      name_fld.setMinimumWidth(110); name_fld.setPlaceholderText("Type product name…")
-        cat_combo = QComboBox();      cat_combo.addItems(["Drinks","Snacks","Hot","Other"]); cat_combo.setFixedWidth(72)
-        qty_spin  = QSpinBox();       qty_spin.setMinimum(1); qty_spin.setMaximum(9999); qty_spin.setFixedWidth(56)
-        cost_spin = QDoubleSpinBox(); cost_spin.setMaximum(99999); cost_spin.setDecimals(2); cost_spin.setPrefix("EGP "); cost_spin.setFixedWidth(110)
-        sale_spin = QDoubleSpinBox(); sale_spin.setMaximum(99999); sale_spin.setDecimals(2); sale_spin.setPrefix("EGP "); sale_spin.setFixedWidth(110)
-        rm_btn    = QPushButton("✕"); rm_btn.setFixedWidth(26); rm_btn.setObjectName("danger")
+        name_fld  = QLineEdit();      name_fld.setMinimumWidth(120); name_fld.setMinimumHeight(34); name_fld.setPlaceholderText("Type product name…")
+        cat_combo = QComboBox();      cat_combo.addItems(["Drinks","Snacks","Hot","Other"]); cat_combo.setFixedWidth(90); cat_combo.setMinimumHeight(34)
+        qty_spin  = QSpinBox();       qty_spin.setMinimum(1); qty_spin.setMaximum(9999); qty_spin.setFixedWidth(72); qty_spin.setMinimumHeight(34)
+        cost_spin = QDoubleSpinBox(); cost_spin.setMaximum(99999); cost_spin.setDecimals(2); cost_spin.setPrefix("EGP "); cost_spin.setFixedWidth(130); cost_spin.setMinimumHeight(34)
+        sale_spin = QDoubleSpinBox(); sale_spin.setMaximum(99999); sale_spin.setDecimals(2); sale_spin.setPrefix("EGP "); sale_spin.setFixedWidth(130); sale_spin.setMinimumHeight(34)
+        rm_btn    = QPushButton("✕"); rm_btn.setFixedWidth(30); rm_btn.setMinimumHeight(34); rm_btn.setObjectName("danger")
 
         sale_spin.hide()
 
