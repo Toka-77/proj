@@ -62,6 +62,7 @@ def init_db():
             end_time      DATETIME,
             room_charge   REAL    DEFAULT 0.0,
             snacks_total  REAL    DEFAULT 0.0,
+            deposit       REAL    DEFAULT 0.0,
             discount      REAL    DEFAULT 0.0,
             promo_code    TEXT    DEFAULT '',
             total_bill    REAL    DEFAULT 0.0,
@@ -76,6 +77,7 @@ def init_db():
             sku           TEXT PRIMARY KEY,
             name          TEXT NOT NULL,
             category      TEXT DEFAULT 'Other',
+            unit_cost     REAL NOT NULL DEFAULT 0.0,
             selling_price REAL NOT NULL DEFAULT 0.0,
             quantity      INTEGER NOT NULL DEFAULT 0
         )
@@ -216,6 +218,7 @@ def init_db():
             start_time    TEXT    NOT NULL,
             end_time      TEXT    NOT NULL,
             num_people    INTEGER NOT NULL DEFAULT 1,
+            deposit       REAL    DEFAULT 0.0,
             status        TEXT    NOT NULL DEFAULT 'Confirmed'
                           CHECK(status IN ('Confirmed','Cancelled','Completed')),
             notes         TEXT    DEFAULT '',
@@ -361,10 +364,10 @@ def _migrate_to_sku_schema(c, conn):
     # Rebuild products table
     c.execute("DROP TABLE products")
     c.execute('''CREATE TABLE products (sku TEXT PRIMARY KEY, name TEXT NOT NULL,
-        category TEXT DEFAULT 'Other', selling_price REAL NOT NULL DEFAULT 0.0,
-        quantity INTEGER NOT NULL DEFAULT 0)''')
+        category TEXT DEFAULT 'Other', unit_cost REAL NOT NULL DEFAULT 0.0,
+        selling_price REAL NOT NULL DEFAULT 0.0, quantity INTEGER NOT NULL DEFAULT 0)''')
     for oid, (name, cat, qty, price, sku) in id_to_sku.items():
-        c.execute("INSERT OR IGNORE INTO products VALUES (?,?,?,?,?)", (sku, name, cat, price, qty))
+        c.execute("INSERT OR IGNORE INTO products (sku, name, category, selling_price, quantity) VALUES (?,?,?,?,?)", (sku, name, cat, price, qty))
     conn.commit()
 
 
@@ -423,7 +426,7 @@ def _seed_accounts(c):
         ('2100', 'Accrued Expenses',    'Liability'),
         ('2200', 'Unearned Revenue',    'Liability'),
         ('3000', 'Owner Equity',        'Equity'),
-        ('3100', 'Retained Earnings',   'Equity'),
+        ('3100', 'Current Year Earnings', 'Equity'),
         ('4000', 'Sales Revenue',       'Revenue'),
         ('4100', 'Service Revenue',     'Revenue'),
         ('4200', 'Room Revenue',        'Revenue'),
@@ -493,3 +496,24 @@ def _seed_users(c):
         users
     )
 
+def start_new_financial_year():
+    """Wipes transactional data to start a new year, but keeps master data (rooms, products, customers, etc.)."""
+    conn = get_connection()
+    c = conn.cursor()
+    conn.execute("PRAGMA foreign_keys = OFF")
+    
+    tables_to_clear = [
+        'sales_invoice_items', 'sales_invoices',
+        'purchase_invoice_items', 'purchase_invoices',
+        'sales', 'expenses', 'sessions', 'bookings',
+        'journal_lines', 'journal_entries'
+    ]
+    
+    for tbl in tables_to_clear:
+        c.execute(f"DELETE FROM {tbl}")
+        c.execute("DELETE FROM sqlite_sequence WHERE name=?", (tbl,))
+        
+    c.execute("UPDATE rooms SET status = 'Available'")
+        
+    conn.commit()
+    conn.close()

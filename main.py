@@ -10,7 +10,7 @@ import sys, os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QStackedWidget, QGraphicsOpacityEffect,
-    QDialog, QFormLayout, QLineEdit,
+    QDialog, QFormLayout, QLineEdit, QSpinBox, QDoubleSpinBox
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont
@@ -405,6 +405,9 @@ class AISApp(QMainWindow):
         # Inventory: view only — no price edit or delete
         self.pg_inv.set_readonly(True)
 
+        # Sales: price cannot be edited by employees
+        self.pg_sales.set_readonly(True)
+
         # If somehow on a hidden page, go to dashboard
         if self.stack.currentIndex() in self.EMPLOYEE_HIDDEN:
             self.switch_page(0)
@@ -480,6 +483,13 @@ class AISApp(QMainWindow):
         """Public API — pages can call this to show a toast."""
         self._show_toast(level, title, message)
 
+def _auto_select_focus(self, event):
+    type(self).__bases__[0].focusInEvent(self, event)
+    QTimer.singleShot(0, self.selectAll)
+
+QSpinBox.focusInEvent = _auto_select_focus
+QDoubleSpinBox.focusInEvent = _auto_select_focus
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -488,6 +498,9 @@ if __name__ == "__main__":
 
     # Apply theme before showing login
     app.setStyleSheet(get_qss('dark'))
+    
+    # Initialize DB tables
+    init_db()
 
     while True:
         login = LoginDialog()

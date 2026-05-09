@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QFormLayout,
     QFrame, QMessageBox, QGridLayout, QScrollArea, QTabWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QDateEdit,
-    QTimeEdit, QProgressBar,
+    QTimeEdit, QProgressBar, QCheckBox
 )
 from PyQt5.QtCore import Qt, QDate, QTime
 from PyQt5.QtGui import QColor
@@ -16,6 +16,8 @@ from core import (
     AccountingManager, AccountStatementManager,
     LoyaltyManager, SettingsManager, BookingManager, PDFGenerator,
 )
+import database
+from datetime import datetime
 
 
 def page_container(title, subtitle=""):
@@ -65,7 +67,8 @@ class DashboardPage:
         self.s_occ.update_value(occ)
         self.s_rev.update_value(f"{rep['total_revenue']:.0f} EGP")
         p = rep['profit']
-        self.s_prof.update_value(f"{p:.0f} EGP", "#3ecf8e" if p >= 0 else "#f06292")
+        self.s_prof.update_value(f"{abs(p):.0f} EGP", "#3ecf8e" if p >= 0 else "#f06292")
+        self.s_prof.update_title("Net Profit" if p >= 0 else "Net Loss")
 
         while self.room_grid.count():
             w = self.room_grid.takeAt(0).widget()
@@ -210,6 +213,7 @@ class RoomsPage:
                    f"Room Charge:  {res['room_charge']:.2f} EGP\n"
                    f"Snacks:       {res['snacks_total']:.2f} EGP\n"
                    f"Discount:    -{res['discount']:.2f} EGP\n"
+                   f"Deposit:     -{res.get('deposit', 0.0):.2f} EGP\n"
                    f"{'─'*30}\n"
                    f"TOTAL:        {res['total_bill']:.2f} EGP"
                    + pts_note)
@@ -231,7 +235,7 @@ class InventoryPage:
         left = QWidget(); left.setObjectName("card")
         ll = QVBoxLayout(left); ll.setContentsMargins(16,16,16,16)
         ll.addWidget(QLabel("📦  Products Catalogue", objectName="sec_title"))
-        self.prod_tbl = make_table(["SKU","Name","Category","Selling Price","Stock"])
+        self.prod_tbl = make_table(["SKU","Name","Category","Cost","Selling Price","Stock"])
         ll.addWidget(self.prod_tbl)
 
         ll.addWidget(QLabel("⚠️  Low Stock Alerts", objectName="sec_title"))
@@ -277,16 +281,16 @@ class InventoryPage:
         if row < 0: return
         self.sel_sku.setText(self.prod_tbl.item(row, 0).text())
         self.sel_name.setText(self.prod_tbl.item(row, 1).text())
-        try:    self.new_price.setValue(float(self.prod_tbl.item(row, 3).text()))
+        try:    self.new_price.setValue(float(self.prod_tbl.item(row, 4).text()))
         except: pass
 
     def refresh(self):
         prods = InventoryManager.get_all_products()
         self.prod_tbl.setRowCount(len(prods))
         for i, p in enumerate(prods):
-            set_row(self.prod_tbl, i, [p[0], p[1], p[2], f"{p[3]:.2f}", p[4]])
-            si = self.prod_tbl.item(i, 4)
-            if si and p[4] <= 5: si.setForeground(QColor("#f06292"))
+            set_row(self.prod_tbl, i, [p[0], p[1], p[2], f"{p[3]:.2f}", f"{p[4]:.2f}", p[5]])
+            si = self.prod_tbl.item(i, 5)
+            if si and p[5] <= 5: si.setForeground(QColor("#f06292"))
 
         low = InventoryManager.get_low_stock(threshold=5)
         self.low_tbl.setRowCount(len(low))
@@ -449,11 +453,12 @@ class ReportsPage:
         self.r_rev.update_value(f"{rep['total_revenue']:,.2f} EGP")
         self.r_exp.update_value(f"{rep['total_expenses']:,.2f} EGP")
         p = rep['profit']
-        self.r_prof.update_value(f"{p:,.2f} EGP", "#3ecf8e" if p >= 0 else "#f06292")
+        self.r_prof.update_value(f"{abs(p):,.2f} EGP", "#3ecf8e" if p >= 0 else "#f06292")
+        self.r_prof.update_title("Net Profit" if p >= 0 else "Net Loss")
         self.r_top.update_value(f"{rep['most_used_room']} ({rep['most_used_count']})")
         self.r_sess.update_value(rep['total_sessions'])
         self.r_active.update_value(rep['active_sessions'])
-        self.r_inv.update_value(f"{rep['inventory_value']:,.0f} EGP")
+        self.r_inv.update_value("0 EGP")
         self.r_today.update_value(f"{rep['snacks_today']:,.0f} EGP")
 
         rev_type = rep['revenue_per_type']
@@ -519,6 +524,10 @@ class SalesInvoicePage:
         self.total_lbl.setStyleSheet("font-size:16px; font-weight:700; color:#3ecf8e;")
         rl.addWidget(self.total_lbl)
         self._add_item_row()
+        
+        self.paid_check = QCheckBox("Paid immediately (Cash)")
+        self.paid_check.setChecked(True)
+        rl.addWidget(self.paid_check)
 
         save = QPushButton("💾  Save Invoice"); save.setObjectName("primary")
         save.setCursor(Qt.PointingHandCursor); save.clicked.connect(self.handle_save)
@@ -534,6 +543,8 @@ class SalesInvoicePage:
         prod = QComboBox(); prod.setMinimumWidth(120)
         qty = QSpinBox(); qty.setMinimum(1); qty.setMaximum(9999)
         price = QDoubleSpinBox(); price.setMaximum(99999); price.setDecimals(2); price.setPrefix("EGP ")
+        if getattr(self, '_is_readonly', False):
+            price.setReadOnly(True)
         rm = QPushButton("✕"); rm.setFixedWidth(30); rm.setObjectName("danger")
 
         def on_prod_change(idx, p=prod, pr=price):
@@ -550,11 +561,12 @@ class SalesInvoicePage:
         self.item_rows.append(entry)
         self.items_layout.addWidget(row_w)
 
-        def remove(e=entry):
+        def remove(checked=False, e=entry):
             if len(self.item_rows) > 1:
-                self.item_rows.remove(e)
-                e['widget'].deleteLater()
-                self._update_total()
+                if e in self.item_rows:
+                    self.item_rows.remove(e)
+                    e['widget'].deleteLater()
+                    self._update_total()
         rm.clicked.connect(remove)
         self._populate_products()
 
@@ -565,8 +577,12 @@ class SalesInvoicePage:
             if cb.count() == 0:
                 cb.blockSignals(True)
                 for p in prods:
-                    cb.addItem(f"{p[1]}  [stock: {p[4]}]", (p[0], p[3]))
+                    cb.addItem(f"{p[1]}  [stock: {p[5]}]", (p[0], p[4]))
                 cb.blockSignals(False)
+                if cb.count() > 0:
+                    data = cb.currentData()
+                    if data and isinstance(data, tuple) and len(data) > 1:
+                        entry['price'].setValue(data[1])
 
     def _update_total(self):
         total = sum(e['qty'].value() * e['price'].value() for e in self.item_rows)
@@ -611,8 +627,17 @@ class SalesInvoicePage:
                     LoyaltyManager.add_points(cust, total)
             except Exception:
                 pass
+            if self.paid_check.isChecked():
+                conn = database.get_connection()
+                inv_id = conn.execute("SELECT MAX(id) FROM sales_invoices").fetchone()[0]
+                conn.close()
+                SalesInvoiceManager.mark_paid(inv_id)
             QMessageBox.information(self.page, "✅", msg)
             self.cust_edit.clear()
+            for e in self.item_rows: e['widget'].deleteLater()
+            self.item_rows.clear()
+            self._add_item_row()
+            self._update_total()
             self.refresh()
             if self._refresh_cb: self._refresh_cb()
         else:
@@ -643,6 +668,11 @@ class SalesInvoicePage:
             os.startfile(result)
         else:
             QMessageBox.warning(self.page, "Error", result)
+
+    def set_readonly(self, readonly: bool):
+        self._is_readonly = readonly
+        for entry in self.item_rows:
+            entry['price'].setReadOnly(readonly)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -730,6 +760,10 @@ class PurchaseInvoicePage:
 
         self._add_item_row()
 
+        self.paid_check = QCheckBox("Paid immediately (Cash)")
+        self.paid_check.setChecked(True)
+        rl.addWidget(self.paid_check)
+
         save = QPushButton("💾  Save Invoice"); save.setObjectName("primary")
         save.setMinimumHeight(38); save.setCursor(Qt.PointingHandCursor)
         save.clicked.connect(self.handle_save)
@@ -767,13 +801,15 @@ class PurchaseInvoicePage:
             prod = InventoryManager.get_product_by_name(name) if name else None
             if prod:
                 e['is_new'] = False
+                e['prod_data'] = prod
                 e['name_fld'].setStyleSheet("color:#3ecf8e;")
                 e['cat_combo'].hide(); e['sale'].hide()
                 e['info_cat'].setText(prod[2])
-                e['info_sale'].setText(f"Stock: {prod[4]}")
+                e['info_sale'].setText(f"Stock: {prod[5]}")
                 e['info_cat'].show(); e['info_sale'].show()
             else:
                 e['is_new'] = True
+                e['prod_data'] = None
                 e['name_fld'].setStyleSheet("")
                 e['info_cat'].hide(); e['info_sale'].hide()
                 e['cat_combo'].show(); e['sale'].show()
@@ -790,9 +826,10 @@ class PurchaseInvoicePage:
         self.item_rows.append(entry)
         self.items_layout.addWidget(row_w)
 
-        def _remove(e=entry):
+        def _remove(checked=False, e=entry):
             if len(self.item_rows) > 1:
-                self.item_rows.remove(e); e['widget'].deleteLater(); self._update_total()
+                if e in self.item_rows:
+                    self.item_rows.remove(e); e['widget'].deleteLater(); self._update_total()
         rm_btn.clicked.connect(_remove)
 
     def _update_total(self):
@@ -838,19 +875,40 @@ class PurchaseInvoicePage:
             name = e['name_fld'].text().strip()
             qty  = e['qty'].value()
             cost = e['cost'].value()
-            if not name: errors.append("Enter product name."); continue
+            if not name: continue
+
+            prod_check = InventoryManager.get_product_by_name(name)
+            if prod_check:
+                e['is_new'] = False
+                e['prod_data'] = prod_check
+
             item = {'name': name, 'qty': qty, 'unit_cost': cost}
             if e['is_new']:
                 sale = e['sale'].value()
                 if sale <= 0: errors.append(f"Enter selling price for new product '{name}'."); continue
+                if sale < cost: errors.append(f"Selling price for '{name}' ({sale}) cannot be less than purchase cost ({cost})."); continue
                 item['selling_price'] = sale
                 item['category']      = e['cat_combo'].currentText()
+            else:
+                existing_sale = e['prod_data'][4]
+                if existing_sale < cost:
+                    errors.append(f"Cost ({cost}) for '{name}' exceeds its current selling price ({existing_sale}). Update its price in Inventory first.")
+                    continue
             items.append(item)
         if errors:    return QMessageBox.warning(self.page, "Validation Error", "\n".join(errors))
         if not items: return QMessageBox.warning(self.page, "Error", "Add at least one product.")
         ok, msg = PurchaseInvoiceManager.create_invoice(sup, items)
         if ok:
+            if self.paid_check.isChecked():
+                conn = database.get_connection()
+                inv_id = conn.execute("SELECT MAX(id) FROM purchase_invoices").fetchone()[0]
+                conn.close()
+                PurchaseInvoiceManager.mark_paid(inv_id)
             QMessageBox.information(self.page, "✅", msg)
+            for e in self.item_rows: e['widget'].deleteLater()
+            self.item_rows.clear()
+            self._add_item_row()
+            self._update_total()
             self.refresh()
             if self._refresh_cb: self._refresh_cb()
         else:
@@ -1056,20 +1114,23 @@ class AccountingPage:
         bs_cols.addWidget(a_w)
         le_w = QWidget(); le_w.setObjectName("card")
         lv = QVBoxLayout(le_w); lv.setContentsMargins(10,8,10,8)
+        
+        lv.addWidget(QLabel("💎  Equity", objectName="sec_title"))
+        self.bs_e_tbl = make_table(["Account","Balance (EGP)"])
+        lv.addWidget(self.bs_e_tbl)
+        self.bs_e_total = QLabel("Total: 0.00")
+        self.bs_e_total.setStyleSheet("font-weight:700;color:#5c9cf5;")
+        lv.addWidget(self.bs_e_total)
+        
+        lv.addWidget(make_divider())
+        
         lv.addWidget(QLabel("🔴  Liabilities", objectName="sec_title"))
         self.bs_l_tbl = make_table(["Account","Balance (EGP)"])
         lv.addWidget(self.bs_l_tbl)
         self.bs_l_total = QLabel("Total: 0.00")
         self.bs_l_total.setStyleSheet("font-weight:700;color:#f06292;")
         lv.addWidget(self.bs_l_total)
-        lv.addWidget(make_divider())
-        lv.addWidget(QLabel("💎  Equity", objectName="sec_title"))
-        self.bs_e_tbl = make_table(["Account","Balance (EGP)"])
-        self.bs_e_tbl.setMaximumHeight(100)
-        lv.addWidget(self.bs_e_tbl)
-        self.bs_e_total = QLabel("Total: 0.00")
-        self.bs_e_total.setStyleSheet("font-weight:700;color:#5c9cf5;")
-        lv.addWidget(self.bs_e_total)
+        
         bs_cols.addWidget(le_w)
         bl.addLayout(bs_cols)
         self.tabs.addTab(self.bs_tab, "📊 Balance Sheet")
@@ -1141,7 +1202,8 @@ class AccountingPage:
         tr_val = inc['total_revenue']; te_val = inc['total_expenses']; ni = inc['net_income']
         self.is_rev.update_value(f"{tr_val:,.2f} EGP")
         self.is_exp.update_value(f"{te_val:,.2f} EGP")
-        self.is_net.update_value(f"{ni:,.2f} EGP", "#3ecf8e" if ni >= 0 else "#f06292")
+        self.is_net.update_value(f"{abs(ni):,.2f} EGP", "#3ecf8e" if ni >= 0 else "#f06292")
+        self.is_net.update_title("Net Profit" if ni >= 0 else "Net Loss")
         self.is_rev_tbl.setRowCount(len(inc['revenues']))
         for i, r in enumerate(inc['revenues']):
             set_row(self.is_rev_tbl, i, [r[0], f"{r[1]:,.2f}"])
@@ -1155,14 +1217,12 @@ class AccountingPage:
         self.is_exp_total.setText(f"Total Expenses: {te_val:,.2f} EGP")
         color = "#3ecf8e" if ni >= 0 else "#f06292"
         sign  = "Profit" if ni >= 0 else "Loss"
-        self.is_net_lbl.setText(f"Net {sign}: {ni:,.2f} EGP")
+        self.is_net_lbl.setText(f"Net {sign}: {abs(ni):,.2f} EGP")
         self.is_net_lbl.setStyleSheet(f"font-size:15px;font-weight:800;padding:6px;color:{color};")
 
         # Balance sheet
         bs = AccountingManager.get_balance_sheet()
         asset_rows = list(bs.get('Asset', []))
-        if bs['inventory_value'] > 0:
-            asset_rows.append(('Inventory (Stock Value)', bs['inventory_value']))
         if bs['cash_balance'] != 0:
             asset_rows.append(('Cash & Cash Equivalents', bs['cash_balance']))
         ta = sum(a[1] for a in asset_rows)
@@ -1184,7 +1244,7 @@ class AccountingPage:
         self.bs_l_total.setText(f"Total Liabilities: {tl_val:,.2f} EGP")
 
         eq_rows = list(bs.get('Equity', []))
-        eq_rows.append(('Retained Earnings (Net Income)', ni))
+        eq_rows.append(('Current Year Net Income', ni))
         te = sum(e[1] for e in eq_rows)
         self.bs_eq.update_value(f"{te:,.2f} EGP")
         self.bs_e_tbl.setRowCount(len(eq_rows))
@@ -1212,6 +1272,8 @@ class AccountingPage:
         cr_amt = self.je_cr.value()
         if dr_amt <= 0 or cr_amt <= 0:
             return QMessageBox.warning(self.page, "Error", "Enter valid amounts.")
+        if dr_amt != cr_amt:
+            return QMessageBox.warning(self.page, "Error", "Total Debit must equal Total Credit.")
         lines = [(dr_acc, dr_amt, 0), (cr_acc, 0, cr_amt)]
         entity = self.je_entity.text().strip()
         ok, msg = AccountingManager.create_journal_entry(desc, lines, self.je_ref.text(), entity)
@@ -1538,7 +1600,8 @@ class SettingsPage:
             rl.addLayout(row)
 
         rl.addWidget(make_divider())
-        rl.addWidget(QLabel("🔄  Reset Notification History", objectName="sec_title"))
+        rl.addWidget(QLabel("⚠️  Danger Zone", objectName="sec_title"))
+        
         rst_lbl = QLabel("Clears the notification dedup cache\nso alerts can show again.")
         rst_lbl.setStyleSheet("font-size:11px; color:#6b7a99;"); rst_lbl.setWordWrap(True)
         rl.addWidget(rst_lbl)
@@ -1546,6 +1609,15 @@ class SettingsPage:
         rst_btn.setCursor(Qt.PointingHandCursor)
         rst_btn.clicked.connect(lambda: (self._reset_alerts(), None))
         rl.addWidget(rst_btn)
+
+        db_lbl = QLabel("Clears all transactional history (sessions, sales, expenses, invoices) to start a new year. Keeps master data like rooms, products, and customers.")
+        db_lbl.setStyleSheet("font-size:11px; color:#f06292;"); db_lbl.setWordWrap(True)
+        rl.addWidget(db_lbl)
+        reset_db_btn = QPushButton("📅  Start New Financial Year"); reset_db_btn.setObjectName("danger")
+        reset_db_btn.setCursor(Qt.PointingHandCursor)
+        reset_db_btn.clicked.connect(self._start_new_financial_year)
+        rl.addWidget(reset_db_btn)
+
         rl.addStretch()
         grid.addWidget(right, 2)
         lay.addLayout(grid)
@@ -1554,6 +1626,19 @@ class SettingsPage:
         from core import NotificationManager
         NotificationManager.reset()
         QMessageBox.information(self.page, "✅", "Alert history cleared.")
+
+    def _start_new_financial_year(self):
+        reply = QMessageBox.question(
+            self.page, "⚠️ Start New Financial Year",
+            "Are you absolutely sure you want to start a new financial year?\n\nThis will clear ALL past transactions (Sessions, Invoices, Expenses, Journal Entries, etc.) to start fresh.\n\nMaster data (Products, Customers, Rooms, Settings) will be preserved.\nThis action CANNOT be undone!",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            import database
+            database.start_new_financial_year()
+            QMessageBox.information(self.page, "✅ Year Closed Successfully", "All transactions have been cleared. The system is ready for the new financial year!")
+            if hasattr(self, '_refresh_cb') and self._refresh_cb:
+                self._refresh_cb()
 
     def refresh(self):
         s = SettingsManager.get_all()
@@ -1606,7 +1691,7 @@ class BookingPage:
         filter_row.addWidget(clr_btn)
         ll.addLayout(filter_row)
 
-        self.book_tbl = make_table(["#","Room","Customer","Date","From","To","People","Status"])
+        self.book_tbl = make_table(["#","Room","Customer","Date","From","To","People","Deposit","Status"])
         ll.addWidget(self.book_tbl)
 
         btn_row = QHBoxLayout()
@@ -1630,6 +1715,7 @@ class BookingPage:
         self.bk_start = QTimeEdit(QTime(9, 0)); self.bk_start.setDisplayFormat("HH:mm")
         self.bk_end   = QTimeEdit(QTime(11, 0)); self.bk_end.setDisplayFormat("HH:mm")
         self.bk_ppl   = QSpinBox(); self.bk_ppl.setMinimum(1); self.bk_ppl.setMaximum(50)
+        self.bk_dep   = QDoubleSpinBox(); self.bk_dep.setMaximum(99999); self.bk_dep.setDecimals(2); self.bk_dep.setPrefix("EGP ")
         self.bk_notes = QLineEdit(); self.bk_notes.setPlaceholderText("Notes...")
         f.addRow("Room:",     self.bk_room)
         f.addRow("Customer:", self.bk_cust)
@@ -1637,6 +1723,7 @@ class BookingPage:
         f.addRow("From:",     self.bk_start)
         f.addRow("To:",       self.bk_end)
         f.addRow("People:",   self.bk_ppl)
+        f.addRow("Deposit:",  self.bk_dep)
         f.addRow("Notes:",    self.bk_notes)
         rl.addLayout(f)
         book_btn = QPushButton("📅  Confirm Booking"); book_btn.setObjectName("primary")
@@ -1661,8 +1748,8 @@ class BookingPage:
         self._booking_ids = [r[0] for r in rows]
         self.book_tbl.setRowCount(len(rows))
         for i, r in enumerate(rows):
-            set_row(self.book_tbl, i, [i+1, r[1], r[2], r[3], r[4], r[5], r[6], r[7]])
-            si = self.book_tbl.item(i, 7)
+            set_row(self.book_tbl, i, [i+1, r[1], r[2], r[3], r[4], r[5], r[6], f"{r[10]:.2f}", r[7]])
+            si = self.book_tbl.item(i, 8)
             if si:
                 c = {'Confirmed': '#3ecf8e', 'Cancelled': '#f06292', 'Completed': '#5c9cf5'}.get(r[7], '#fff')
                 si.setForeground(QColor(c))
@@ -1687,12 +1774,12 @@ class BookingPage:
             cur_time = QTime(now.hour, now.minute)
             if self.bk_start.time() < cur_time:
                 return QMessageBox.warning(self.page, "Error", "Cannot book a past time slot.")
-        ok, msg = BookingManager.create_booking(rid, cust, date, start, end, self.bk_ppl.value(), self.bk_notes.text())
+        ok, msg = BookingManager.create_booking(rid, cust, date, start, end, self.bk_ppl.value(), self.bk_dep.value(), self.bk_notes.text())
         if ok:
             QMessageBox.information(self.page, "✅ Booked", msg)
-            self.bk_cust.clear(); self.bk_notes.clear(); self.refresh()
+            self.bk_cust.clear(); self.bk_notes.clear(); self.bk_dep.setValue(0); self.refresh()
         else:
-            QMessageBox.warning(self.page, "Conflict", msg)
+            QMessageBox.warning(self.page, "Error", msg)
 
     def handle_cancel(self):
         row = self.book_tbl.currentRow()

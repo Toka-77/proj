@@ -106,14 +106,14 @@ QPushButton#secondary:hover {{ background:{T['accent']}; color:#fff; }}
 /* ── Inputs ───────────────────────────────────────── */
 QLineEdit, QSpinBox, QDoubleSpinBox {{
     background:{T['input_bg']}; color:{T['text']}; border:1px solid {T['border']};
-    border-radius:8px; padding:9px 14px; font-size:13px; font-family:'Segoe UI';
+    border-radius:8px; padding:10px 14px; font-size:16px; font-weight: 500; font-family:'Segoe UI';
 }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
     border:1px solid {T['accent']};
 }}
 QComboBox {{
     background:{T['input_bg']}; color:{T['text']}; border:1px solid {T['border']};
-    border-radius:8px; padding:9px 14px; font-size:13px; font-family:'Segoe UI';
+    border-radius:8px; padding:10px 14px; font-size:16px; font-weight: 500; font-family:'Segoe UI';
 }}
 QComboBox:focus {{ border:1px solid {T['accent']}; }}
 QComboBox::drop-down {{ border:none; width:24px; }}

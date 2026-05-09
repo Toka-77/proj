@@ -33,10 +33,10 @@ class StatCard(QWidget):
         self.val_lbl.setStyleSheet(f"color:{color}; font-size:28px; font-weight:800; background:transparent;")
         layout.addWidget(self.val_lbl)
 
-        lbl = QLabel(label)
-        lbl.setObjectName("stat_lbl")
-        lbl.setStyleSheet("background:transparent;")
-        layout.addWidget(lbl)
+        self.title_lbl = QLabel(label)
+        self.title_lbl.setObjectName("stat_lbl")
+        self.title_lbl.setStyleSheet("background:transparent;")
+        layout.addWidget(self.title_lbl)
 
         # Subtle glow
         shadow = QGraphicsDropShadowEffect(self)
@@ -49,6 +49,9 @@ class StatCard(QWidget):
         self.val_lbl.setText(str(v))
         if color:
             self.val_lbl.setStyleSheet(f"color:{color}; font-size:28px; font-weight:800; background:transparent;")
+
+    def update_title(self, title):
+        self.title_lbl.setText(title)
 
 
 class NavButton(QPushButton):
