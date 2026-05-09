@@ -234,7 +234,13 @@ class InventoryPage:
 
         left = QWidget(); left.setObjectName("card")
         ll = QVBoxLayout(left); ll.setContentsMargins(16,16,16,16)
-        ll.addWidget(QLabel("📦  Products Catalogue", objectName="sec_title"))
+        hdr_layout = QHBoxLayout()
+        hdr_layout.addWidget(QLabel("📦  Products Catalogue", objectName="sec_title"))
+        hdr_layout.addStretch()
+        self.inv_val_lbl = QLabel("Total Value: 0.00 EGP")
+        self.inv_val_lbl.setStyleSheet("font-weight:bold; color:#3ecf8e; font-size:14px;")
+        hdr_layout.addWidget(self.inv_val_lbl)
+        ll.addLayout(hdr_layout)
         self.prod_tbl = make_table(["SKU","Name","Category","Cost","Selling Price","Stock"])
         ll.addWidget(self.prod_tbl)
 
@@ -289,6 +295,9 @@ class InventoryPage:
         except: pass
 
     def refresh(self):
+        total_val = InventoryManager.get_total_inventory_value()
+        self.inv_val_lbl.setText(f"Total Value: {total_val:,.2f} EGP")
+        
         prods = InventoryManager.get_all_products()
         self.prod_tbl.setRowCount(len(prods))
         for i, p in enumerate(prods):
@@ -470,7 +479,8 @@ class ReportsPage:
             self.r_top.update_value(f"{top_room} ({top_count})")
         self.r_sess.update_value(rep['total_sessions'])
         self.r_active.update_value(rep['active_sessions'])
-        self.r_inv.update_value("0 EGP")
+        from core import InventoryManager
+        self.r_inv.update_value(f"{InventoryManager.get_total_inventory_value():,.2f} EGP")
         self.r_today.update_value(f"{rep['snacks_today']:,.0f} EGP")
 
         rev_type = rep['revenue_per_type']
@@ -670,7 +680,7 @@ class SalesInvoicePage:
                     return QMessageBox.warning(self.page, "Error", "Invalid admin password! Transaction blocked.")
                     
         if not items: return QMessageBox.warning(self.page, "Error", "Add at least one product.")
-        ok, msg = SalesInvoiceManager.create_invoice(cust, items, session_id=session_id)
+        ok, msg = SalesInvoiceManager.create_invoice(cust, items, session_id=session_id, paid=self.paid_check.isChecked())
         if ok:
             try:
                 total = sum(qty * price for _, qty, price in items)
@@ -678,11 +688,6 @@ class SalesInvoicePage:
                     LoyaltyManager.add_points(cust, total)
             except Exception:
                 pass
-            if self.paid_check.isChecked():
-                conn = database.get_connection()
-                inv_id = conn.execute("SELECT MAX(id) FROM sales_invoices").fetchone()[0]
-                conn.close()
-                SalesInvoiceManager.mark_paid(inv_id)
             QMessageBox.information(self.page, "✅", msg)
             self.cust_edit.clear()
             for e in self.item_rows: e['widget'].deleteLater()
@@ -771,7 +776,13 @@ class PurchaseInvoicePage:
         right = QWidget(); right.setObjectName("card")
         rl = QVBoxLayout(right); rl.setContentsMargins(18,18,18,20); rl.setSpacing(14)
 
-        rl.addWidget(QLabel("🧾  New Purchase Invoice", objectName="sec_title"))
+        hdr = QHBoxLayout()
+        hdr.addWidget(QLabel("➕  Add Purchase Invoice", objectName="sec_title"))
+        hdr.addStretch()
+        self.inv_val_lbl = QLabel("Total Inventory Value: 0.00 EGP")
+        self.inv_val_lbl.setStyleSheet("font-weight:bold; color:#3ecf8e; font-size:14px;")
+        hdr.addWidget(self.inv_val_lbl)
+        rl.addLayout(hdr)
 
         sup_lbl = QLabel("Supplier"); sup_lbl.setStyleSheet("color:#8a9cc8; font-size:10px; font-weight:600; letter-spacing:1px;")
         rl.addWidget(sup_lbl)
@@ -905,6 +916,9 @@ class PurchaseInvoicePage:
         self.detail_card.show()
 
     def refresh(self):
+        total_val = InventoryManager.get_total_inventory_value()
+        self.inv_val_lbl.setText(f"Total Inventory Value: {total_val:,.2f} EGP")
+        
         sups = PurchaseInvoiceManager.get_suppliers()
         self.sup_combo.clear()
         for s in sups: self.sup_combo.addItem(s[1])
@@ -948,13 +962,8 @@ class PurchaseInvoicePage:
             items.append(item)
         if errors:    return QMessageBox.warning(self.page, "Validation Error", "\n".join(errors))
         if not items: return QMessageBox.warning(self.page, "Error", "Add at least one product.")
-        ok, msg = PurchaseInvoiceManager.create_invoice(sup, items)
+        ok, msg = PurchaseInvoiceManager.create_invoice(sup, items, paid=self.paid_check.isChecked())
         if ok:
-            if self.paid_check.isChecked():
-                conn = database.get_connection()
-                inv_id = conn.execute("SELECT MAX(id) FROM purchase_invoices").fetchone()[0]
-                conn.close()
-                PurchaseInvoiceManager.mark_paid(inv_id)
             QMessageBox.information(self.page, "✅", msg)
             for e in self.item_rows: e['widget'].deleteLater()
             self.item_rows.clear()
@@ -1044,9 +1053,13 @@ class AccountingPage:
         f.addRow("Credit Account:",self.je_acc2)
         f.addRow("Credit Amount:", self.je_cr)
         jl.addLayout(f)
+        btn_row = QHBoxLayout()
         btn = QPushButton("💾 Save Entry"); btn.setObjectName("primary")
         btn.setCursor(Qt.PointingHandCursor); btn.clicked.connect(self.handle_add_je)
-        jl.addWidget(btn)
+        add_acc_btn = QPushButton("➕ Add Account"); add_acc_btn.setObjectName("secondary")
+        add_acc_btn.setCursor(Qt.PointingHandCursor); add_acc_btn.clicked.connect(self.handle_add_account)
+        btn_row.addWidget(btn); btn_row.addStretch(); btn_row.addWidget(add_acc_btn)
+        jl.addLayout(btn_row)
         self.tabs.addTab(self.je_tab, "📒 Journal Entries")
 
         # ── Tab 2: General Ledger ──────────────────────────────────────────
@@ -1333,6 +1346,39 @@ class AccountingPage:
             self.je_desc.clear(); self.je_entity.clear(); self.je_ref.clear()
             self.je_dr.setValue(0); self.je_cr.setValue(0)
             self.refresh()
+
+    # ── Add New Account ────────────────────────────────────────────────────
+    def handle_add_account(self):
+        from PyQt5.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox
+        dlg = QDialog(self.page)
+        dlg.setWindowTitle("Add New Account")
+        dlg.setMinimumWidth(300)
+        lay = QFormLayout(dlg)
+        
+        name_edit = QLineEdit()
+        type_combo = QComboBox()
+        type_combo.addItems(["Asset", "Liability", "Equity", "Revenue", "Expense"])
+        
+        lay.addRow("Account Name:", name_edit)
+        lay.addRow("Account Type:", type_combo)
+        
+        bbox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bbox.accepted.connect(dlg.accept)
+        bbox.rejected.connect(dlg.reject)
+        lay.addRow(bbox)
+        
+        if dlg.exec_() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            atype = type_combo.currentText()
+            if not name:
+                return QMessageBox.warning(self.page, "Error", "Account name cannot be empty.")
+                
+            ok, msg = AccountingManager.add_account(name, atype)
+            if ok:
+                QMessageBox.information(self.page, "✅ Success", msg)
+                self.refresh()
+            else:
+                QMessageBox.warning(self.page, "Error", msg)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1681,13 +1727,16 @@ class SettingsPage:
     def _start_new_financial_year(self):
         reply = QMessageBox.question(
             self.page, "⚠️ Start New Financial Year",
-            "Are you absolutely sure you want to start a new financial year?\n\nThis will clear ALL past transactions (Sessions, Invoices, Expenses, Journal Entries, etc.) to start fresh.\n\nMaster data (Products, Customers, Rooms, Settings) will be preserved.\nThis action CANNOT be undone!",
+            "Are you sure you want to close the current financial year?\n\nThis will generate a Closing Journal Entry to zero out all Revenue and Expense accounts into Equity (Current Year Earnings).\n\nHistorical data and master data will be preserved.",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
             import database
-            database.start_new_financial_year()
-            QMessageBox.information(self.page, "✅ Year Closed Successfully", "All transactions have been cleared. The system is ready for the new financial year!")
+            ok, msg = database.start_new_financial_year()
+            if ok:
+                QMessageBox.information(self.page, "✅ Year Closed Successfully", msg)
+            else:
+                QMessageBox.warning(self.page, "⚠️ Notice", msg)
             if hasattr(self, '_refresh_cb') and self._refresh_cb:
                 self._refresh_cb()
 

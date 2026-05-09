@@ -308,6 +308,13 @@ class InventoryManager:
         return rows
 
     @staticmethod
+    def get_total_inventory_value():
+        conn = get_connection()
+        val = conn.execute("SELECT COALESCE(SUM(quantity * unit_cost), 0) FROM products").fetchone()[0]
+        conn.close()
+        return val
+
+    @staticmethod
     def sell_product(product_sku, quantity, session_id=None):
         """Deduct stock and record sale. Used for session-linked snack sales."""
         conn = get_connection()
@@ -414,14 +421,16 @@ class ReportManager:
     @staticmethod
     def generate_report():
         conn = get_connection()
+        last_close = conn.execute("SELECT entry_date FROM journal_entries WHERE reference='CLOSE-YR' ORDER BY entry_date DESC LIMIT 1").fetchone()
+        start_date = last_close[0] if last_close else '1970-01-01 00:00:00'
 
         # Revenue per room type (Segment Reporting)
         rev_type = dict(conn.execute('''
             SELECT r.type, COALESCE(SUM(s.room_charge), 0)
             FROM sessions s JOIN rooms r ON s.room_id = r.id
-            WHERE s.end_time IS NOT NULL
+            WHERE s.end_time IS NOT NULL AND s.end_time >= ?
             GROUP BY r.type
-        ''').fetchall())
+        ''', (start_date,)).fetchall())
 
         # Ensure all types appear
         for t in ('Study', 'Gaming', 'Cinema'):
@@ -433,28 +442,28 @@ class ReportManager:
         snacks_rev = conn.execute('''
             SELECT COALESCE(SUM(sa.total_price), 0)
             FROM sales sa
-            WHERE sa.session_id IS NULL
-               OR sa.session_id IN (SELECT id FROM sessions WHERE end_time IS NOT NULL)
-        ''').fetchone()[0]
+            WHERE sa.sale_time >= ? AND (sa.session_id IS NULL
+               OR sa.session_id IN (SELECT id FROM sessions WHERE end_time IS NOT NULL))
+        ''', (start_date,)).fetchone()[0]
 
         # Total discounts
         total_disc = conn.execute(
-            "SELECT COALESCE(SUM(discount), 0) FROM sessions WHERE end_time IS NOT NULL"
+            "SELECT COALESCE(SUM(discount), 0) FROM sessions WHERE end_time IS NOT NULL AND end_time >= ?", (start_date,)
         ).fetchone()[0]
 
-        total_revenue = total_room_rev + snacks_rev - total_disc
-
-        # Expenses
-        total_exp = conn.execute("SELECT COALESCE(SUM(amount), 0) FROM expenses").fetchone()[0]
-
-        profit = total_revenue - total_exp
+        from core import AccountingManager
+        inc = AccountingManager.get_income_statement()
+        total_revenue = inc['total_revenue']
+        total_exp = inc['total_expenses']
+        profit = inc['net_income']
 
         # Most used room (by session count)
         mu = conn.execute('''
             SELECT r.name, COUNT(s.id) as cnt
             FROM sessions s JOIN rooms r ON s.room_id = r.id
+            WHERE s.start_time >= ?
             GROUP BY r.id ORDER BY cnt DESC LIMIT 1
-        ''').fetchone()
+        ''', (start_date,)).fetchone()
         most_used = mu[0] if mu else 'No Data'
         most_used_count = mu[1] if mu else 0
 
@@ -462,9 +471,9 @@ class ReportManager:
         rev_room = dict(conn.execute('''
             SELECT r.name, COALESCE(SUM(s.room_charge), 0)
             FROM sessions s JOIN rooms r ON s.room_id = r.id
-            WHERE s.end_time IS NOT NULL
+            WHERE s.end_time IS NOT NULL AND s.end_time >= ?
             GROUP BY r.id ORDER BY SUM(s.room_charge) DESC
-        ''').fetchall())
+        ''', (start_date,)).fetchall())
 
         # Sessions count
         total_sessions = conn.execute("SELECT COUNT(*) FROM sessions WHERE end_time IS NOT NULL").fetchone()[0]
@@ -589,7 +598,7 @@ class SalesInvoiceManager:
         return rows
 
     @staticmethod
-    def create_invoice(customer_name, items, notes='', session_id=None):
+    def create_invoice(customer_name, items, notes='', session_id=None, paid=False):
         """
         Create a sales invoice and deduct stock.
         items = list of (product_sku, quantity, unit_price)
@@ -598,9 +607,10 @@ class SalesInvoiceManager:
         conn = get_connection()
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         total = sum(q * p for _, q, p in items)
+        status = 'Paid' if paid else 'Unpaid'
         conn.execute(
-            "INSERT INTO sales_invoices (customer_name, invoice_date, total_amount, notes) VALUES (?,?,?,?)",
-            (customer_name, date, total, notes)
+            "INSERT INTO sales_invoices (customer_name, invoice_date, total_amount, status, notes) VALUES (?,?,?,?,?)",
+            (customer_name, date, total, status, notes)
         )
         inv_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         for psku, qty, price in items:
@@ -618,15 +628,17 @@ class SalesInvoiceManager:
                 "VALUES (?,?,?,?,?,?,?)",
                 (psku, session_id, qty, price, round(qty * price, 2), date, sold_below)
             )
+        # Entry 1: Sales Revenue
         conn.execute(
             "INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
-            (date, f"Sales Invoice #{inv_id} - {customer_name}", f"SI-{inv_id}")
+            (date, f"Sales Invoice #{inv_id} - {customer_name} (Revenue)", f"SI-REV-{inv_id}")
         )
-        je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        je_id_rev = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        debit_acc = 'Cash' if paid else 'Accounts Receivable'
         conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                     (je_id, 'Accounts Receivable', total, 0))
+                     (je_id_rev, debit_acc, total, 0))
         conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                     (je_id, 'Sales Revenue', 0, total))
+                     (je_id_rev, 'Sales Revenue', 0, total))
                      
         # Calculate Total Cost of Goods Sold
         total_cogs = 0.0
@@ -635,11 +647,17 @@ class SalesInvoiceManager:
             if c_row:
                 total_cogs += c_row[0] * qty
                 
+        # Entry 2: COGS
         if total_cogs > 0:
+            conn.execute(
+                "INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                (date, f"Sales Invoice #{inv_id} - {customer_name} (COGS)", f"SI-COGS-{inv_id}")
+            )
+            je_id_cogs = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
             conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                         (je_id, 'Cost of Goods Sold', total_cogs, 0))
+                         (je_id_cogs, 'Cost of Goods Sold', total_cogs, 0))
             conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                         (je_id, 'Inventory', 0, total_cogs))
+                         (je_id_cogs, 'Inventory', 0, total_cogs))
                          
         conn.commit(); conn.close()
         return True, f"Sales Invoice #{inv_id} created - Total: {total:.2f} EGP"
@@ -705,7 +723,7 @@ class PurchaseInvoiceManager:
         return rows
 
     @staticmethod
-    def create_invoice(supplier_name, items, notes=''):
+    def create_invoice(supplier_name, items, notes='', paid=False):
         """
         items = list of dicts:
           {'name': str, 'qty': int, 'unit_cost': float,
@@ -715,9 +733,10 @@ class PurchaseInvoiceManager:
         conn = get_connection()
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         total = sum(it['qty'] * it['unit_cost'] for it in items)
+        status = 'Paid' if paid else 'Unpaid'
         conn.execute(
-            "INSERT INTO purchase_invoices (supplier_name, invoice_date, total_amount, notes) VALUES (?,?,?,?)",
-            (supplier_name, date, total, notes)
+            "INSERT INTO purchase_invoices (supplier_name, invoice_date, total_amount, status, notes) VALUES (?,?,?,?,?)",
+            (supplier_name, date, total, status, notes)
         )
         inv_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -757,10 +776,11 @@ class PurchaseInvoiceManager:
             (date, f"Purchase Invoice #{inv_id} - {supplier_name}", f"PI-{inv_id}")
         )
         je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        credit_acc = 'Cash' if paid else 'Accounts Payable'
         conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
                      (je_id, 'Inventory', total, 0))
         conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                     (je_id, 'Accounts Payable', 0, total))
+                     (je_id, credit_acc, 0, total))
         conn.commit(); conn.close()
         return True, f"Purchase Invoice #{inv_id} created - Total: {total:.2f} EGP"
 
@@ -826,6 +846,32 @@ class AccountingManager:
         rows = conn.execute("SELECT account_code, account_name, account_type FROM chart_of_accounts ORDER BY account_code").fetchall()
         conn.close()
         return rows
+
+    @staticmethod
+    def add_account(account_name, account_type):
+        conn = get_connection()
+        existing = conn.execute("SELECT id FROM chart_of_accounts WHERE LOWER(account_name)=?", (account_name.strip().lower(),)).fetchone()
+        if existing:
+            conn.close()
+            return False, "Account name already exists."
+        
+        prefixes = {'Asset': '1', 'Liability': '2', 'Equity': '3', 'Revenue': '4', 'Expense': '5'}
+        prefix = prefixes.get(account_type, '9')
+        
+        highest_code = conn.execute("SELECT account_code FROM chart_of_accounts WHERE account_code LIKE ? ORDER BY account_code DESC LIMIT 1", (prefix + '%',)).fetchone()
+        if highest_code:
+            try:
+                new_code = str(int(highest_code[0]) + 10)
+            except ValueError:
+                new_code = prefix + "999"
+        else:
+            new_code = prefix + "000"
+            
+        conn.execute("INSERT INTO chart_of_accounts (account_code, account_name, account_type) VALUES (?,?,?)",
+                     (new_code, account_name.strip(), account_type))
+        conn.commit()
+        conn.close()
+        return True, f"Account '{account_name}' added successfully."
 
     @staticmethod
     def create_journal_entry(description, lines, reference='', entity=''):

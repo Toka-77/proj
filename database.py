@@ -512,23 +512,93 @@ def _seed_users(c):
     )
 
 def start_new_financial_year():
-    """Wipes transactional data to start a new year, but keeps master data (rooms, products, customers, etc.)."""
+    """Closes the financial year by generating a closing entry that zeroes out Revenues and Expenses to Equity."""
     conn = get_connection()
-    c = conn.cursor()
-    conn.execute("PRAGMA foreign_keys = OFF")
+    date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    tables_to_clear = [
-        'sales_invoice_items', 'sales_invoices',
-        'purchase_invoice_items', 'purchase_invoices',
-        'sales', 'expenses', 'sessions', 'bookings',
-        'journal_lines', 'journal_entries'
-    ]
+    # Get all Revenue balances
+    revenues = conn.execute('''
+        SELECT jl.account, SUM(jl.credit) - SUM(jl.debit) as bal
+        FROM journal_lines jl
+        JOIN chart_of_accounts ca ON jl.account = ca.account_name
+        WHERE ca.account_type = 'Revenue'
+        GROUP BY jl.account
+        HAVING bal != 0
+    ''').fetchall()
     
-    for tbl in tables_to_clear:
-        c.execute(f"DELETE FROM {tbl}")
-        c.execute("DELETE FROM sqlite_sequence WHERE name=?", (tbl,))
+    # Get all Expense balances
+    expenses = conn.execute('''
+        SELECT jl.account, SUM(jl.debit) - SUM(jl.credit) as bal
+        FROM journal_lines jl
+        JOIN chart_of_accounts ca ON jl.account = ca.account_name
+        WHERE ca.account_type = 'Expense'
+        GROUP BY jl.account
+        HAVING bal != 0
+    ''').fetchall()
+    
+    # Get all Drawing balances
+    drawings = conn.execute('''
+        SELECT jl.account, SUM(jl.debit) - SUM(jl.credit) as bal
+        FROM journal_lines jl
+        JOIN chart_of_accounts ca ON jl.account = ca.account_name
+        WHERE LOWER(ca.account_name) LIKE '%drawing%'
+        GROUP BY jl.account
+        HAVING bal != 0
+    ''').fetchall()
+    
+    if not revenues and not expenses and not drawings:
+        conn.close()
+        return False, "No revenue, expense, or drawing balances to close."
         
-    c.execute("UPDATE rooms SET status = 'Available'")
-        
+    total_rev = sum(r[1] for r in revenues)
+    total_exp = sum(e[1] for e in expenses)
+    total_drawings = sum(d[1] for d in drawings)
+    
+    net_income = total_rev - total_exp
+    retained_change = net_income - total_drawings
+    
+    # Create the closing journal entry
+    conn.execute("INSERT INTO journal_entries (entry_date, description, reference, entity) VALUES (?,?,?,?)",
+                 (date, "Financial Year Closing Entry", "CLOSE-YR", "System"))
+    je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    
+    # Debit revenues to close them (they have a credit balance)
+    for account, bal in revenues:
+        if bal > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, account, bal, 0))
+        elif bal < 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, account, 0, -bal))
+                         
+    # Credit expenses to close them (they have a debit balance)
+    for account, bal in expenses:
+        if bal > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, account, 0, bal))
+        elif bal < 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, account, -bal, 0))
+                         
+    # Credit drawings to close them (they have a debit balance)
+    for account, bal in drawings:
+        if bal > 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, account, 0, bal))
+        elif bal < 0:
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, account, -bal, 0))
+                         
+    # Transfer retained earnings change to Equity ('Current Year Earnings' or 'Owner Equity')
+    if retained_change > 0:
+        # Credit Equity
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Current Year Earnings', 0, retained_change))
+    elif retained_change < 0:
+        # Debit Equity
+        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                     (je_id, 'Current Year Earnings', -retained_change, 0))
+                     
     conn.commit()
     conn.close()
+    return True, "Financial Year Closed successfully using Closing Entry logic."
