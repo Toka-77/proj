@@ -19,6 +19,8 @@ from database import init_db
 from styles import get_qss
 from widgets import NavButton
 from core import SettingsManager, NotificationManager, UserManager
+from translations import tr, set_lang, current_lang, is_arabic
+from PyQt5.QtGui import QFont
 
 from pages import (
     DashboardPage, RoomsPage, InventoryPage, ExpensesPage, ReportsPage,
@@ -34,7 +36,7 @@ from pages import (
 class LoginDialog(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AIS Hub — Login")
+        self.setWindowTitle(tr("AIS Hub — Login"))
         self.setFixedSize(480, 420)
         self.current_user = None
         self._build()
@@ -272,7 +274,7 @@ class AISApp(QMainWindow):
         self.current_user = current_user
         self._logout_requested = False
 
-        self.setWindowTitle("Co-Working Space AIS — Accounting Information System")
+        self.setWindowTitle(tr("Co-Working Space AIS — Accounting Information System"))
         self.resize(1300, 800)
         self.setMinimumSize(950, 650)
 
@@ -281,8 +283,12 @@ class AISApp(QMainWindow):
         self._theme = SettingsManager.get('theme', 'dark') or 'dark'
         self._toast_y_offset = 0
 
+        saved_lang = SettingsManager.get('language', 'ar') or 'ar'
+        set_lang(saved_lang)
+
         self._build_ui()
         self._apply_theme()
+        self._apply_lang_direction()
         self._apply_role_restrictions()
 
     # ── UI construction ────────────────────────────────────────────────────
@@ -307,7 +313,7 @@ class AISApp(QMainWindow):
 
         self.nav_btns = []
         for icon, label in self.NAV_KEYS:
-            btn = NavButton(icon, label)
+            btn = NavButton(icon, tr(label))
             btn.clicked.connect(lambda _, n=len(self.nav_btns): self.switch_page(n))
             self.nav_btns.append(btn)
             sb.addWidget(btn)
@@ -320,8 +326,21 @@ class AISApp(QMainWindow):
         self.theme_btn.setFixedSize(44, 34)
         self.theme_btn.setCursor(Qt.PointingHandCursor)
         self.theme_btn.clicked.connect(self.toggle_theme)
-        self.theme_btn.setToolTip("Toggle Dark / Light mode")
-        sb.addWidget(self.theme_btn)
+        self.theme_btn.setToolTip(tr("Toggle Dark / Light mode"))
+        
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        btn_row.addWidget(self.theme_btn)
+        
+        self.lang_btn = QPushButton("🌐 EN" if is_arabic() else "🌐 AR")
+        self.lang_btn.setObjectName("icon_btn")
+        self.lang_btn.setFixedHeight(34)
+        self.lang_btn.setCursor(Qt.PointingHandCursor)
+        self.lang_btn.clicked.connect(self.toggle_lang)
+        self.lang_btn.setToolTip(tr("Switch language / تغيير اللغة"))
+        btn_row.addWidget(self.lang_btn)
+        
+        sb.addLayout(btn_row)
 
         # ── User info + Logout ────────────────────────────────────────────
         role = self.current_user['role']
@@ -337,7 +356,7 @@ class AISApp(QMainWindow):
         role_lbl.setAlignment(Qt.AlignCenter)
         sb.addWidget(role_lbl)
 
-        logout_btn = QPushButton("🚪 Logout")
+        logout_btn = QPushButton(tr("🚪 Logout"))
         logout_btn.setObjectName("danger")
         logout_btn.setFixedHeight(30)
         logout_btn.setCursor(Qt.PointingHandCursor)
@@ -452,6 +471,27 @@ class AISApp(QMainWindow):
 
     def _apply_theme(self):
         QApplication.instance().setStyleSheet(get_qss(self._theme))
+
+    def toggle_lang(self):
+        new_lang = 'ar' if current_lang() == 'en' else 'en'
+        set_lang(new_lang)
+        SettingsManager.set('language', new_lang)
+        self.lang_btn.setText("🌐 EN" if new_lang == 'ar' else "🌐 AR")
+        
+        for i, (icon, label) in enumerate(self.NAV_KEYS):
+            self.nav_btns[i].setText(f"{icon}  {tr(label)}")
+            
+        self._apply_lang_direction()
+        self.refresh_all()
+
+    def _apply_lang_direction(self):
+        app = QApplication.instance()
+        if is_arabic():
+            app.setLayoutDirection(Qt.RightToLeft)
+            app.setFont(QFont("Arial", 10))
+        else:
+            app.setLayoutDirection(Qt.LeftToRight)
+            app.setFont(QFont("Segoe UI", 10))
 
     # ── Logout ─────────────────────────────────────────────────────────────
     def logout(self):

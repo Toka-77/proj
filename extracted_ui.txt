@@ -1,0 +1,37 @@
+Enter customer name…
+Points: —
+Spent: —
+Type product name…
+⚠️ Notice
+⚠️ Over Capacity
+⚠️ Start New Financial Year
+✅ Booked
+✅ PDF
+✅ PDF Generated
+✅ Redeemed
+✅ Started
+✅ Success
+✅ Year Closed Successfully
+✏️  Edit Price & Cost
+✨ Platinum — Max Tier!
+➕  Add Purchase Invoice
+➕  New Journal Entry
+🎁  Redeem Points
+🎯  Loyalty Program
+🏆  Leaderboard
+🏠  Live Room Status
+🏠  Revenue per Room
+🏭 Supplier:
+💰 Final Bill
+💳  Redeem
+💾 Save Entry
+📊  Revenue per Room Type (Segment Reporting)
+📋  Purchase History
+📝  Entry Detail Lines (select entry above)
+🔍  Customer Lookup
+🔍  Look Up
+🔴  Liabilities
+🗑  Delete Selected
+🟢  Assets
+🟢  Revenues
+🥉 Bronze

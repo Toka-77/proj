@@ -1,0 +1,975 @@
+L43: [Dashboard]
+  self.page, lay = page_container(tr("Dashboard"), "Real-time Overview")
+
+L43: [Real-time Overview]
+  self.page, lay = page_container(tr("Dashboard"), "Real-time Overview")
+
+L45: [Total Rooms]
+  self.s_rooms = StatCard("🏠", "Total Rooms", "0", "#7c5cbf")
+
+L48: [Net Profit]
+  self.s_prof  = StatCard("📈", tr("Net Profit"),"0 EGP", "#5c9cf5")
+
+L60: [Room]
+  self.table = make_table(["#", tr("Room"), tr("Type"), tr("Customer"), tr("People
+
+L60: [Type]
+  self.table = make_table(["#", tr("Room"), tr("Type"), tr("Customer"), tr("People
+
+L60: [Customer]
+  self.table = make_table(["#", tr("Room"), tr("Type"), tr("Customer"), tr("People
+
+L60: [People]
+  self.table = make_table(["#", tr("Room"), tr("Type"), tr("Customer"), tr("People
+
+L60: [Started]
+  self.table = make_table(["#", tr("Room"), tr("Type"), tr("Customer"), tr("People
+
+L60: [Elapsed]
+  self.table = make_table(["#", tr("Room"), tr("Type"), tr("Customer"), tr("People
+
+L72: [Net Profit]
+  self.s_prof.update_title(tr("Net Profit") if p >= 0 else tr("Net Loss"))
+
+L72: [Net Loss]
+  self.s_prof.update_title(tr("Net Profit") if p >= 0 else tr("Net Loss"))
+
+L94: [Rooms & Sessions]
+  self.page, lay = page_container(tr("Rooms & Sessions"))
+
+L99: [All Rooms]
+  ll.addWidget(QLabel(tr("All Rooms"), objectName="sec_title"))
+
+L100: [Name]
+  self.rooms_tbl = make_table(["#",tr("Name"),tr("Type"),tr("Status"),tr("Price/hr
+
+L100: [Type]
+  self.rooms_tbl = make_table(["#",tr("Name"),tr("Type"),tr("Status"),tr("Price/hr
+
+L100: [Status]
+  self.rooms_tbl = make_table(["#",tr("Name"),tr("Type"),tr("Status"),tr("Price/hr
+
+L100: [Price/hr]
+  self.rooms_tbl = make_table(["#",tr("Name"),tr("Type"),tr("Status"),tr("Price/hr
+
+L100: [Capacity]
+  self.rooms_tbl = make_table(["#",tr("Name"),tr("Type"),tr("Status"),tr("Price/hr
+
+L123: [Customer name...]
+  self.start_cust = QLineEdit(); self.start_cust.setPlaceholderText(tr("Customer n
+
+L125: [Room:]
+  f1.addRow(tr("Room:"), self.start_room)
+
+L126: [Customer:]
+  f1.addRow(tr("Customer:"), self.start_cust)
+
+L127: [People:]
+  f1.addRow(tr("People:"), self.start_ppl)
+
+L140: [Session:]
+  f2.addRow(tr("Session:"), self.end_sess)
+
+L141: [Discount:]
+  f2.addRow(tr("Discount:"), self.end_disc)
+
+L151: [Room]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [Type]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [Customer]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [People]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [Start]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [Snacks]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [Disc]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L151: [Total]
+  self.hist_tbl = make_table(["#",tr("Room"),tr("Type"),tr("Customer"),tr("People"
+
+L194: [Active]
+  set_row(self.hist_tbl, i, [i+1,h[1],h[2],h[3],h[4],h[5],h[6] or tr("Active"),
+
+L200: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "No available room.")
+
+L200: [No available room.]
+  return QMessageBox.warning(self.page, tr("Error"), "No available room.")
+
+L204: [Required]
+  return QMessageBox.warning(self.page, "Required", tr("Enter a customer name."))
+
+L204: [Enter a customer name.]
+  return QMessageBox.warning(self.page, "Required", tr("Enter a customer name."))
+
+L224: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L229: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "No active session.")
+
+L229: [No active session.]
+  return QMessageBox.warning(self.page, tr("Error"), "No active session.")
+
+L256: [Error]
+  QMessageBox.warning(self.page, tr("Error"), res)
+
+L262: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a room from the ta
+
+L262: [Select a room from the table first.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a room from the ta
+
+L267: [Edit Room Price]
+  new_price, ok = QInputDialog.getDouble(self.page, tr("Edit Room Price"), f"Enter
+
+L275: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a session from the
+
+L275: [Select a session from the history table.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a session from the
+
+L284: [Error]
+  QMessageBox.warning(self.page, tr("Error"), result)
+
+L290: [Add New Room]
+  dlg.setWindowTitle(tr("Add New Room"))
+
+L297: [Optional description]
+  desc_e  = QLineEdit(); desc_e.setPlaceholderText("Optional description")
+
+L298: [Name:]
+  fl.addRow("Name:", name_e)
+
+L299: [Type:]
+  fl.addRow("Type:", type_cb)
+
+L300: [Price/hr:]
+  fl.addRow("Price/hr:", price_e)
+
+L301: [Capacity:]
+  fl.addRow("Capacity:", cap_e)
+
+L302: [Description:]
+  fl.addRow("Description:", desc_e)
+
+L309: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "Room name is required.")
+
+L309: [Room name is required.]
+  return QMessageBox.warning(self.page, tr("Error"), "Room name is required.")
+
+L311: [Error]
+  QMessageBox.information(self.page, "✅", msg) if ok else QMessageBox.warning(self
+
+L317: [Snacks & Inventory]
+  self.page, lay = page_container("Snacks & Inventory")
+
+L329: [Name]
+  self.prod_tbl = make_table([tr("SKU"),tr("Name"),tr("Category"),tr("Cost"),tr("S
+
+L329: [Category]
+  self.prod_tbl = make_table([tr("SKU"),tr("Name"),tr("Category"),tr("Cost"),tr("S
+
+L329: [Cost]
+  self.prod_tbl = make_table([tr("SKU"),tr("Name"),tr("Category"),tr("Cost"),tr("S
+
+L329: [Selling Price]
+  self.prod_tbl = make_table([tr("SKU"),tr("Name"),tr("Category"),tr("Cost"),tr("S
+
+L329: [Stock]
+  self.prod_tbl = make_table([tr("SKU"),tr("Name"),tr("Category"),tr("Cost"),tr("S
+
+L333: [Product]
+  self.low_tbl = make_table([tr("SKU"),tr("Product"),tr("Stock")])
+
+L333: [Stock]
+  self.low_tbl = make_table([tr("SKU"),tr("Product"),tr("Stock")])
+
+L343: [Select a product row, then update its selling price and cost.]
+  note = QLabel("Select a product row, then update its selling price and cost.")
+
+L349: [Auto-filled on row select]
+  self.sel_sku.setPlaceholderText("Auto-filled on row select")
+
+L351: [Product name (editable)]
+  self.sel_name.setPlaceholderText("Product name (editable)")
+
+L354: [SKU:]
+  f.addRow("SKU:",       self.sel_sku)
+
+L355: [Name:]
+  f.addRow("Name:",      self.sel_name)
+
+L356: [Unit Cost:]
+  f.addRow("Unit Cost:", self.new_cost)
+
+L357: [Sale Price:]
+  f.addRow("Sale Price:", self.new_price)
+
+L401: [Select Product]
+  if not sku: return QMessageBox.warning(self.page, "Select Product", "Click a row
+
+L401: [Click a row first.]
+  if not sku: return QMessageBox.warning(self.page, "Select Product", "Click a row
+
+L402: [Invalid]
+  if self.new_price.value() <= 0: return QMessageBox.warning(self.page, tr("Invali
+
+L415: [Product updated.]
+  QMessageBox.information(self.page, "✅", "Product updated.")
+
+L419: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L424: [Select Product]
+  if not sku: return QMessageBox.warning(self.page, "Select Product", "Click a row
+
+L424: [Click a row first.]
+  if not sku: return QMessageBox.warning(self.page, "Select Product", "Click a row
+
+L439: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L464: [Category]
+  self.exp_tbl = make_table(["ID",tr("Category"),tr("Amount"),tr("Date"),tr("Descr
+
+L464: [Amount]
+  self.exp_tbl = make_table(["ID",tr("Category"),tr("Amount"),tr("Date"),tr("Descr
+
+L464: [Date]
+  self.exp_tbl = make_table(["ID",tr("Category"),tr("Amount"),tr("Date"),tr("Descr
+
+L464: [Description]
+  self.exp_tbl = make_table(["ID",tr("Category"),tr("Amount"),tr("Date"),tr("Descr
+
+L485: [Description...]
+  self.exp_desc = QLineEdit(); self.exp_desc.setPlaceholderText(tr("Description...
+
+L486: [Category:]
+  f.addRow("Category:", self.exp_cat)
+
+L487: [Amount:]
+  f.addRow(tr("Amount:"), self.exp_amt)
+
+L488: [Description:]
+  f.addRow("Description:", self.exp_desc)
+
+L510: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter a valid amount."))
+
+L510: [Enter a valid amount.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter a valid amount."))
+
+L517: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L521: [Error]
+  if row < 0: return QMessageBox.warning(self.page, tr("Error"), tr("Select an exp
+
+L521: [Select an expense.]
+  if row < 0: return QMessageBox.warning(self.page, tr("Error"), tr("Select an exp
+
+L523: [Confirm]
+  reply = QMessageBox.question(self.page, tr("Confirm"), f"Delete expense #{row+1}
+
+L534: [Financial Reports]
+  self.page, lay = page_container(tr("Financial Reports"), tr("Segment Reporting &
+
+L534: [Segment Reporting & Analytics]
+  self.page, lay = page_container(tr("Financial Reports"), tr("Segment Reporting &
+
+L539: [Net Profit]
+  self.r_prof = StatCard("📈", tr("Net Profit"),     "—", "#5c9cf5")
+
+L540: [Top Room]
+  self.r_top  = StatCard("🏆", tr("Top Room"),       "—", "#ffa726")
+
+L546: [Total Sessions]
+  self.r_sess   = StatCard("🎫", tr("Total Sessions"),  "—", "#7c5cbf")
+
+L547: [Active Sessions]
+  self.r_active = StatCard("⏱", tr("Active Sessions"),  "—", "#ffa726")
+
+L548: [Inventory Value]
+  self.r_inv    = StatCard("📦", tr("Inventory Value"),  "—", "#5c9cf5")
+
+L549: [Snacks Today]
+  self.r_today  = StatCard("🧃", tr("Snacks Today"),    "—", "#3ecf8e")
+
+L555: [Room Type]
+  self.type_tbl = make_table([tr("Room Type"),"Revenue (EGP)",tr("% of Total")])
+
+L560: [Room]
+  self.room_tbl = make_table([tr("Room"),"Revenue (EGP)"])
+
+L570: [Net Profit]
+  self.r_prof.update_title(tr("Net Profit") if p >= 0 else tr("Net Loss"))
+
+L570: [Net Loss]
+  self.r_prof.update_title(tr("Net Profit") if p >= 0 else tr("Net Loss"))
+
+L604: [Sales]
+  self.page, lay = page_container(tr("Sales"), tr("Sales Invoices"))
+
+L604: [Sales Invoices]
+  self.page, lay = page_container(tr("Sales"), tr("Sales Invoices"))
+
+L610: [Customer]
+  self.inv_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Total"),tr("Status"
+
+L610: [Date]
+  self.inv_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Total"),tr("Status"
+
+L610: [Total]
+  self.inv_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Total"),tr("Status"
+
+L610: [Status]
+  self.inv_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Total"),tr("Status"
+
+L617: [Invoice Details]
+  self.detail_title = QLabel(tr("Invoice Details"))
+
+L621: [Product]
+  self.detail_tbl = make_table([tr("Product"),tr("Qty"),"Price",tr("Total")])
+
+L621: [Price]
+  self.detail_tbl = make_table([tr("Product"),tr("Qty"),"Price",tr("Total")])
+
+L621: [Total]
+  self.detail_tbl = make_table([tr("Product"),tr("Qty"),"Price",tr("Total")])
+
+L646: [Customer:]
+  f.addRow(tr("Customer:"),        self.cust_edit)
+
+L647: [Link to Session:]
+  f.addRow(tr("Link to Session:"), self.sess_combo)
+
+L650: [Products:]
+  rl.addWidget(QLabel(tr("Products:"), objectName="sec_title"))
+
+L747: [None (no session)]
+  self.sess_combo.addItem(tr("None (no session)"), None)
+
+L766: [Error]
+  if not cust: return QMessageBox.warning(self.page, tr("Error"), tr("Enter a cust
+
+L766: [Enter a customer name.]
+  if not cust: return QMessageBox.warning(self.page, tr("Error"), tr("Enter a cust
+
+L780: [Invalid Price]
+  return QMessageBox.warning(self.page, tr("Invalid Price"),
+
+L790: [Warning - Below Cost]
+  reply = QMessageBox.warning(self.page, tr("Warning - Below Cost"),
+
+L803: [Manager Override]
+  pwd, ok = QInputDialog.getText(self.page, tr("Manager Override"), tr("Enter Admi
+
+L803: [Enter Admin Password to authorize selling below cost:]
+  pwd, ok = QInputDialog.getText(self.page, tr("Manager Override"), tr("Enter Admi
+
+L812: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "Invalid admin password! Tran
+
+L814: [Error]
+  if not items: return QMessageBox.warning(self.page, tr("Error"), tr("Add at leas
+
+L814: [Add at least one product.]
+  if not items: return QMessageBox.warning(self.page, tr("Error"), tr("Add at leas
+
+L832: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L836: [Error]
+  if row < 0 or row >= len(self._inv_ids): return QMessageBox.warning(self.page, t
+
+L836: [Select an invoice.]
+  if row < 0 or row >= len(self._inv_ids): return QMessageBox.warning(self.page, t
+
+L838: [Confirm]
+  reply = QMessageBox.question(self.page, tr("Confirm"), f"Delete invoice #{row+1}
+
+L845: [Error]
+  if row < 0 or row >= len(self._inv_ids): return QMessageBox.warning(self.page, t
+
+L845: [Select an invoice.]
+  if row < 0 or row >= len(self._inv_ids): return QMessageBox.warning(self.page, t
+
+L851: [Error]
+  if row < 0 or row >= len(self._inv_ids): return QMessageBox.warning(self.page, t
+
+L851: [Select an invoice.]
+  if row < 0 or row >= len(self._inv_ids): return QMessageBox.warning(self.page, t
+
+L858: [Error]
+  QMessageBox.warning(self.page, tr("Error"), result)
+
+L871: [Purchase]
+  self.page, lay = page_container(tr("Purchase"), tr("Purchase Invoices"))
+
+L871: [Purchase Invoices]
+  self.page, lay = page_container(tr("Purchase"), tr("Purchase Invoices"))
+
+L879: [Supplier]
+  self.inv_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Total EGP"),tr("Sta
+
+L879: [Date]
+  self.inv_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Total EGP"),tr("Sta
+
+L879: [Status]
+  self.inv_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Total EGP"),tr("Sta
+
+L896: [Invoice Details]
+  self.detail_title = QLabel(tr("Invoice Details")); self.detail_title.setObjectNa
+
+L900: [Product]
+  self.detail_tbl = make_table([tr("Product"),tr("Qty"),tr("Unit Cost"),tr("Total"
+
+L900: [Unit Cost]
+  self.detail_tbl = make_table([tr("Product"),tr("Qty"),tr("Unit Cost"),tr("Total"
+
+L900: [Total]
+  self.detail_tbl = make_table([tr("Product"),tr("Qty"),tr("Unit Cost"),tr("Total"
+
+L919: [Supplier]
+  sup_lbl = QLabel(tr("Supplier")); sup_lbl.setStyleSheet("color:#8a9cc8; font-siz
+
+L925: [Products]
+  rl.addWidget(QLabel(tr("Products"), objectName="sec_title"))
+
+L934: [Product Name]
+  _hdr(tr("Product Name"), stretch=2)
+
+L935: [Category]
+  _hdr(tr("Category"),  width=90)
+
+L974: [Drinks]
+  cat_combo = QComboBox();      cat_combo.addItems(["Drinks",tr("Snacks"),"Hot","O
+
+L974: [Snacks]
+  cat_combo = QComboBox();      cat_combo.addItems(["Drinks",tr("Snacks"),"Hot","O
+
+L974: [Other]
+  cat_combo = QComboBox();      cat_combo.addItems(["Drinks",tr("Snacks"),"Hot","O
+
+L1069: [Error]
+  if not sup: return QMessageBox.warning(self.page, tr("Error"), tr("Select a supp
+
+L1069: [Select a supplier.]
+  if not sup: return QMessageBox.warning(self.page, tr("Error"), tr("Select a supp
+
+L1095: [Validation Error]
+  if errors:    return QMessageBox.warning(self.page, tr("Validation Error"), "\n"
+
+L1096: [Error]
+  if not items: return QMessageBox.warning(self.page, tr("Error"), tr("Add at leas
+
+L1096: [Add at least one product.]
+  if not items: return QMessageBox.warning(self.page, tr("Error"), tr("Add at leas
+
+L1107: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L1112: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "Select an invoice.")
+
+L1112: [Select an invoice.]
+  return QMessageBox.warning(self.page, tr("Error"), "Select an invoice.")
+
+L1114: [Confirm]
+  reply = QMessageBox.question(self.page, tr("Confirm"), f"Delete invoice #{row+1}
+
+L1122: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "Select an invoice.")
+
+L1122: [Select an invoice.]
+  return QMessageBox.warning(self.page, tr("Error"), "Select an invoice.")
+
+L1129: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), "Select an invoice.")
+
+L1129: [Select an invoice.]
+  return QMessageBox.warning(self.page, tr("Error"), "Select an invoice.")
+
+L1136: [Error]
+  QMessageBox.warning(self.page, tr("Error"), result)
+
+L1148: [Accounting]
+  t = QLabel(tr("Accounting")); t.setObjectName("title"); h.addWidget(t)
+
+L1160: [Date]
+  self.je_tbl = make_table(["#",tr("Date"),tr("Description"),tr("Entity"),tr("Refe
+
+L1160: [Description]
+  self.je_tbl = make_table(["#",tr("Date"),tr("Description"),tr("Entity"),tr("Refe
+
+L1160: [Entity]
+  self.je_tbl = make_table(["#",tr("Date"),tr("Description"),tr("Entity"),tr("Refe
+
+L1160: [Reference]
+  self.je_tbl = make_table(["#",tr("Date"),tr("Description"),tr("Entity"),tr("Refe
+
+L1160: [Total Debit]
+  self.je_tbl = make_table(["#",tr("Date"),tr("Description"),tr("Entity"),tr("Refe
+
+L1166: [Account]
+  self.je_detail_tbl = make_table([tr("Account"),tr("Debit"),tr("Credit")])
+
+L1166: [Debit]
+  self.je_detail_tbl = make_table([tr("Account"),tr("Debit"),tr("Credit")])
+
+L1166: [Credit]
+  self.je_detail_tbl = make_table([tr("Account"),tr("Debit"),tr("Credit")])
+
+L1173: [Description...]
+  self.je_desc   = QLineEdit(); self.je_desc.setPlaceholderText(tr("Description...
+
+L1174: [Entity (customer/supplier name)...]
+  self.je_entity = QLineEdit(); self.je_entity.setPlaceholderText(tr("Entity (cust
+
+L1175: [Reference (invoice#, etc.)...]
+  self.je_ref    = QLineEdit(); self.je_ref.setPlaceholderText(tr("Reference (invo
+
+L1180: [Description:]
+  f.addRow("Description:",   self.je_desc)
+
+L1181: [Entity:]
+  f.addRow(tr("Entity:"),        self.je_entity)
+
+L1182: [Reference:]
+  f.addRow(tr("Reference:"),     self.je_ref)
+
+L1183: [Debit Account:]
+  f.addRow(tr("Debit Account:"), self.je_acc1)
+
+L1184: [Debit Amount:]
+  f.addRow(tr("Debit Amount:"),  self.je_dr)
+
+L1185: [Credit Account:]
+  f.addRow(tr("Credit Account:"),self.je_acc2)
+
+L1186: [Credit Amount:]
+  f.addRow(tr("Credit Amount:"), self.je_cr)
+
+L1204: [Filter:]
+  filter_lbl = QLabel(tr("Filter:"))
+
+L1213: [Accounts Payable]
+  ("Accounts Payable",    "📤 Accounts Payable"),
+
+L1214: [Accounts Receivable]
+  ("Accounts Receivable", "📥 Accounts Receivable"),
+
+L1216: [Inventory]
+  (tr("Inventory"),           "📦 Inventory"),
+
+L1252: [Entry#]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Account]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Date]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Description]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Entity]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Debit]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Credit]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1252: [Reference]
+  self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"
+
+L1263: [Net Income]
+  self.is_net = StatCard("📈",tr("Net Income"),"0 EGP","#5c9cf5")
+
+L1270: [Account]
+  self.is_rev_tbl = make_table([tr("Account"),"Amount (EGP)"])
+
+L1272: [Total: 0.00]
+  self.is_rev_total = QLabel("Total: 0.00")
+
+L1279: [Account]
+  self.is_exp_tbl = make_table([tr("Account"),"Amount (EGP)"])
+
+L1281: [Total: 0.00]
+  self.is_exp_total = QLabel("Total: 0.00")
+
+L1297: [Total Liabilities]
+  self.bs_liab  = StatCard("📋","Total Liabilities","0 EGP","#f06292")
+
+L1305: [Account]
+  self.bs_a_tbl = make_table([tr("Account"),"Balance (EGP)"])
+
+L1307: [Total: 0.00]
+  self.bs_a_total = QLabel("Total: 0.00")
+
+L1315: [Account]
+  self.bs_e_tbl = make_table([tr("Account"),"Balance (EGP)"])
+
+L1317: [Total: 0.00]
+  self.bs_e_total = QLabel("Total: 0.00")
+
+L1324: [Account]
+  self.bs_l_tbl = make_table([tr("Account"),"Balance (EGP)"])
+
+L1326: [Total: 0.00]
+  self.bs_l_total = QLabel("Total: 0.00")
+
+L1338: [Account]
+  self.tb_tbl = make_table([tr("Account"),tr("Total Debit"),tr("Total Credit")])
+
+L1338: [Total Debit]
+  self.tb_tbl = make_table([tr("Account"),tr("Total Debit"),tr("Total Credit")])
+
+L1338: [Total Credit]
+  self.tb_tbl = make_table([tr("Account"),tr("Total Debit"),tr("Total Credit")])
+
+L1341: [Total Debit: 0.00]
+  self.tb_dr_lbl = QLabel("Total Debit: 0.00")
+
+L1343: [Total Credit: 0.00]
+  self.tb_cr_lbl = QLabel("Total Credit: 0.00")
+
+L1353: [Filter the General Ledger table by account name.]
+  """Filter the General Ledger table by account name."""
+
+L1402: [Net Profit]
+  self.is_net.update_title(tr("Net Profit") if ni >= 0 else tr("Net Loss"))
+
+L1402: [Net Loss]
+  self.is_net.update_title(tr("Net Profit") if ni >= 0 else tr("Net Loss"))
+
+L1415: [Profit]
+  sign  = "Profit" if ni >= 0 else "Loss"
+
+L1415: [Loss]
+  sign  = "Profit" if ni >= 0 else "Loss"
+
+L1464: [Error]
+  if not desc: return QMessageBox.warning(self.page, tr("Error"), tr("Enter descri
+
+L1464: [Enter description.]
+  if not desc: return QMessageBox.warning(self.page, tr("Error"), tr("Enter descri
+
+L1470: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter valid amounts."))
+
+L1470: [Enter valid amounts.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter valid amounts."))
+
+L1472: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Total Debit must equal To
+
+L1472: [Total Debit must equal Total Credit.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Total Debit must equal To
+
+L1486: [Add New Account]
+  dlg.setWindowTitle(tr("Add New Account"))
+
+L1494: [Account Name:]
+  lay.addRow("Account Name:", name_edit)
+
+L1495: [Account Type:]
+  lay.addRow("Account Type:", type_combo)
+
+L1506: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Account name cannot be em
+
+L1506: [Account name cannot be empty.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Account name cannot be em
+
+L1513: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L1525: [Account Statements]
+  t = QLabel("Account Statements"); t.setObjectName("title"); h.addWidget(t)
+
+L1544: [Total]
+  self.cs_total = StatCard("💰",tr("Total"),"0 EGP","#5c9cf5")
+
+L1546: [Outstanding]
+  self.cs_out   = StatCard("⏳",tr("Outstanding"),"0 EGP","#ffa726")
+
+L1550: [Customer]
+  self.cs_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Amount"),tr("Status"
+
+L1550: [Date]
+  self.cs_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Amount"),tr("Status"
+
+L1550: [Amount]
+  self.cs_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Amount"),tr("Status"
+
+L1550: [Status]
+  self.cs_tbl = make_table(["#",tr("Customer"),tr("Date"),tr("Amount"),tr("Status"
+
+L1565: [Total]
+  self.ss_total = StatCard("💰",tr("Total"),"0 EGP","#5c9cf5")
+
+L1567: [Outstanding]
+  self.ss_out   = StatCard("⏳",tr("Outstanding"),"0 EGP","#ffa726")
+
+L1571: [Supplier]
+  self.ss_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Amount"),tr("Status"
+
+L1571: [Date]
+  self.ss_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Amount"),tr("Status"
+
+L1571: [Amount]
+  self.ss_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Amount"),tr("Status"
+
+L1571: [Status]
+  self.ss_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Amount"),tr("Status"
+
+L1579: [All Customers]
+  self.cs_combo.addItem(tr("All Customers"))
+
+L1582: [All Suppliers]
+  self.ss_combo.addItem(tr("All Suppliers"))
+
+L1592: [All Customers]
+  if name == tr("All Customers") or not name:
+
+L1609: [All Suppliers]
+  if name == tr("All Suppliers") or not name:
+
+L1633: [Points & Rewards]
+  self.page, lay = page_container("🎯  Loyalty Program", tr("Points & Rewards"))
+
+L1639: [Customer]
+  self.tbl = make_table(["#", tr("Customer"), tr("Points"), tr("Tier"), tr("Total 
+
+L1639: [Points]
+  self.tbl = make_table(["#", tr("Customer"), tr("Points"), tr("Tier"), tr("Total 
+
+L1639: [Tier]
+  self.tbl = make_table(["#", tr("Customer"), tr("Points"), tr("Tier"), tr("Total 
+
+L1639: [Total Spent]
+  self.tbl = make_table(["#", tr("Customer"), tr("Points"), tr("Tier"), tr("Total 
+
+L1647: [Customer name...]
+  self.search = QLineEdit(); self.search.setPlaceholderText(tr("Customer name...")
+
+L1678: [Points to Redeem:]
+  f.addRow(tr("Points to Redeem:"), self.redeem_pts)
+
+L1722: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter a customer name."))
+
+L1722: [Enter a customer name.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter a customer name."))
+
+L1727: [Points: 0]
+  self.pts_lbl.setText(tr("Points: 0"))
+
+L1759: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Look up a customer first.
+
+L1759: [Look up a customer first.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Look up a customer first.
+
+L1762: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter points to redeem.")
+
+L1762: [Enter points to redeem.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter points to redeem.")
+
+L1770: [Error]
+  QMessageBox.warning(self.page, tr("Error"), str(result))
+
+L1778: [System Configuration]
+  self.page, lay = page_container("⚙️  Settings", tr("System Configuration"))
+
+L1791: [Low Stock Threshold:]
+  f.addRow(tr("Low Stock Threshold:"),  self.low_stock_t)
+
+L1792: [Session Alert (hrs):]
+  f.addRow(tr("Session Alert (hrs):"),  self.sess_hrs)
+
+L1803: [Points Earn Rate:]
+  f2.addRow(tr("Points Earn Rate:"), self.pts_rate)
+
+L1804: [Redeem Rate:]
+  f2.addRow(tr("Redeem Rate:"),      self.redeem_rate)
+
+L1817: [Version]
+  ("📦", tr("Version"),    "3.0.0"),
+
+L1818: [Python]
+  ("🐍", tr("Python"),     "3.12+"),
+
+L1819: [Framework]
+  ("🖼️", tr("Framework"),  "PyQt5"),
+
+L1820: [Database]
+  ("🗄️", tr("Database"),   "SQLite 3"),
+
+L1821: [PDF Engine]
+  ("📄", tr("PDF Engine"), "fpdf2"),
+
+L1822: [System]
+  ("🏢", tr("System"),     "AIS Hub Co-Working Space"),
+
+L1842: [Clears all transactional history (sessions, sales, expenses, invoices) to start a new year. Keeps master data like rooms, products, and customers.]
+  db_lbl = QLabel(tr("Clears all transactional history (sessions, sales, expenses,
+
+L1857: [Alert history cleared.]
+  QMessageBox.information(self.page, "✅", tr("Alert history cleared."))
+
+L1897: [Settings saved successfully.]
+  QMessageBox.information(self.page, "✅", tr("Settings saved successfully."))
+
+L1913: [Date:]
+  filter_row.addWidget(QLabel(tr("Date:")))
+
+L1920: [Show All]
+  clr_btn = QPushButton(tr("Show All")); clr_btn.setObjectName("secondary")
+
+L1926: [Room]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1926: [Customer]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1926: [Date]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1926: [From]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1926: [People]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1926: [Deposit]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1926: [Status]
+  self.book_tbl = make_table(["#",tr("Room"),tr("Customer"),tr("Date"),tr("From"),
+
+L1946: [Customer name...]
+  self.bk_cust  = QLineEdit(); self.bk_cust.setPlaceholderText(tr("Customer name..
+
+L1953: [Notes...]
+  self.bk_notes = QLineEdit(); self.bk_notes.setPlaceholderText(tr("Notes..."))
+
+L1954: [Room:]
+  f.addRow(tr("Room:"),     self.bk_room)
+
+L1955: [Customer:]
+  f.addRow(tr("Customer:"), self.bk_cust)
+
+L1956: [Date:]
+  f.addRow(tr("Date:"),     self.bk_date)
+
+L1957: [From:]
+  f.addRow(tr("From:"),     self.bk_start)
+
+L1959: [People:]
+  f.addRow(tr("People:"),   self.bk_ppl)
+
+L1960: [Deposit:]
+  f.addRow(tr("Deposit:"),  self.bk_dep)
+
+L1961: [Notes:]
+  f.addRow(tr("Notes:"),    self.bk_notes)
+
+L1995: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter a customer name."))
+
+L1995: [Enter a customer name.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Enter a customer name."))
+
+L2000: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("End time must be after st
+
+L2000: [End time must be after start time.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("End time must be after st
+
+L2006: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Cannot book a past date."
+
+L2006: [Cannot book a past date.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Cannot book a past date."
+
+L2010: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Cannot book a past time s
+
+L2010: [Cannot book a past time slot.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Cannot book a past time s
+
+L2016: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L2021: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a booking."))
+
+L2021: [Select a booking.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a booking."))
+
+L2023: [Confirm]
+  reply = QMessageBox.question(self.page, tr("Confirm"), tr("Cancel this booking?"
+
+L2023: [Cancel this booking?]
+  reply = QMessageBox.question(self.page, tr("Confirm"), tr("Cancel this booking?"
+
+L2031: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a booking."))
+
+L2031: [Select a booking.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a booking."))
+
+L2039: [Error]
+  QMessageBox.warning(self.page, tr("Error"), msg)
+
+L2045: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a booking to edit.
+
+L2045: [Select a booking to edit.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Select a booking to edit.
+
+L2056: [Error]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Booking not found."))
+
+L2056: [Booking not found.]
+  return QMessageBox.warning(self.page, tr("Error"), tr("Booking not found."))
+
+L2080: [Room:]
+  fl.addRow(tr("Room:"), room_cb)
+
+L2081: [Customer:]
+  fl.addRow(tr("Customer:"), cust_e)
+
+L2082: [Date:]
+  fl.addRow(tr("Date:"), date_e)
+
+L2083: [From:]
+  fl.addRow(tr("From:"), start_e)
+
+L2085: [People:]
+  fl.addRow(tr("People:"), ppl_e)
+
+L2086: [Notes:]
+  fl.addRow(tr("Notes:"), notes_e)
+
+L2103: [Booking updated successfully.]
+  QMessageBox.information(self.page, "✅", tr("Booking updated successfully."))
+
