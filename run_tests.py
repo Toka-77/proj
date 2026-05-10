@@ -7,9 +7,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 # ── Use a TEMP database so we don't corrupt real data ──────────────────────
 import database
-ORIG_DB = database.DB_PATH
+ORIG_DB = database.DB_FILE
 TEST_DB = os.path.join(os.path.dirname(__file__), '_test_ais.db')
-database.DB_PATH = TEST_DB
+database.DB_FILE = TEST_DB
 if os.path.exists(TEST_DB):
     os.remove(TEST_DB)
 database.init_db()
@@ -398,9 +398,11 @@ conn.close()
 check("CLOSE-YR journal entry created", close_je > 0)
 
 # Revenue/Expense accounts should net to zero in Trial Balance (after close)
+# Note: 'Unearned Revenue' is a Liability, not Revenue, so it correctly remains
 tb2 = AccountingManager.get_trial_balance()
 rev_exp_non_zero = [(acc, dr, cr) for acc, dr, cr in tb2 
-                    if any(kw in acc.lower() for kw in ['revenue','expense','cost of goods'])]
+                    if any(kw in acc.lower() for kw in ['revenue','expense','cost of goods'])
+                    and 'unearned' not in acc.lower()]
 check("Revenue & Expense accounts zero after year close", 
       len(rev_exp_non_zero)==0, 
       f"Non-zero: {rev_exp_non_zero[:3]}")

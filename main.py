@@ -5,6 +5,7 @@ main.py — AIS Hub entry point with:
   • Toast notification system
   • Dark / Light theme toggle
   • Settings integration
+  • Arabic / English UI switching
 """
 import sys, os
 from PyQt5.QtWidgets import (
@@ -350,17 +351,17 @@ class AISApp(QMainWindow):
         user_lbl.setAlignment(Qt.AlignCenter)
         sb.addWidget(user_lbl)
 
-        role_lbl = QLabel(role_icon)
-        role_lbl.setStyleSheet("font-size:10px; color:#5a6a8a;")
-        role_lbl.setAlignment(Qt.AlignCenter)
-        sb.addWidget(role_lbl)
+        self.role_lbl = QLabel(tr(role_icon))
+        self.role_lbl.setStyleSheet("font-size:10px; color:#5a6a8a;")
+        self.role_lbl.setAlignment(Qt.AlignCenter)
+        sb.addWidget(self.role_lbl)
 
-        logout_btn = QPushButton(tr("🚪 Logout"))
-        logout_btn.setObjectName("danger")
-        logout_btn.setFixedHeight(30)
-        logout_btn.setCursor(Qt.PointingHandCursor)
-        logout_btn.clicked.connect(self.logout)
-        sb.addWidget(logout_btn)
+        self.logout_btn = QPushButton(tr("🚪 Logout"))
+        self.logout_btn.setObjectName("danger")
+        self.logout_btn.setFixedHeight(30)
+        self.logout_btn.setCursor(Qt.PointingHandCursor)
+        self.logout_btn.clicked.connect(self.logout)
+        sb.addWidget(self.logout_btn)
 
         info = QLabel("Multi-Activity Hub\nAIS v3.0")
         info.setObjectName("subtitle")
@@ -476,12 +477,63 @@ class AISApp(QMainWindow):
         set_lang(new_lang)
         SettingsManager.set('language', new_lang)
         self.lang_btn.setText("🌐 EN" if new_lang == 'ar' else "🌐 AR")
-        
+
+        # Update nav buttons
         for i, (icon, label) in enumerate(self.NAV_KEYS):
             self.nav_btns[i].setText(f"{icon}  {tr(label)}")
             
+        role_icon = "🔴 Admin" if self.current_user['role'] == 'admin' else "🎫 Employee"
+        self.role_lbl.setText(tr(role_icon))
+        self.logout_btn.setText(tr("🚪 Logout"))
+
         self._apply_lang_direction()
-        self.refresh_all()
+
+        # Rebuild all pages so every label/header gets the new language
+        self._rebuild_pages()
+
+    def _rebuild_pages(self):
+        """Destroy and recreate all page widgets with the current language."""
+        current_idx = self.stack.currentIndex()
+
+        # Remove old pages from stack
+        while self.stack.count():
+            w = self.stack.widget(0)
+            self.stack.removeWidget(w)
+            w.deleteLater()
+
+        # Recreate all pages
+        self.pg_dash     = DashboardPage()
+        self.pg_rooms    = RoomsPage()
+        self.pg_booking  = BookingPage()
+        self.pg_inv      = InventoryPage()
+        self.pg_exp      = ExpensesPage()
+        self.pg_rep      = ReportsPage()
+        self.pg_sales    = SalesInvoicePage()
+        self.pg_purchase = PurchaseInvoicePage()
+        self.pg_acct     = AccountingPage()
+        self.pg_stmt     = AccountStatementPage()
+        self.pg_loyalty  = LoyaltyPage()
+        self.pg_settings = SettingsPage()
+
+        for pg in [self.pg_rooms, self.pg_inv, self.pg_exp,
+                   self.pg_sales, self.pg_purchase, self.pg_booking]:
+            pg._refresh_cb = self.refresh_all
+
+        self._all_pages = [
+            self.pg_dash, self.pg_rooms, self.pg_booking, self.pg_inv,
+            self.pg_exp, self.pg_rep, self.pg_sales, self.pg_purchase,
+            self.pg_acct, self.pg_stmt, self.pg_loyalty, self.pg_settings,
+        ]
+        for pg in self._all_pages:
+            self.stack.addWidget(pg.page)
+
+        # Re-apply role restrictions on the new pages
+        self._apply_role_restrictions()
+
+        # Return to same page index
+        safe_idx = min(current_idx, self.stack.count() - 1)
+        self.switch_page(safe_idx)
+
 
     def _apply_lang_direction(self):
         app = QApplication.instance()

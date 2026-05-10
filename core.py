@@ -924,7 +924,7 @@ class PurchaseInvoiceManager:
         # Reverse inventory
         items = conn.execute("SELECT product_sku, quantity FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
         for sku, qty in items:
-            conn.execute("UPDATE products SET quantity = quantity - ? WHERE sku=?", (qty, sku))
+            conn.execute("UPDATE products SET quantity = quantity + ? WHERE sku=?", (qty, sku))
             
         conn.execute("DELETE FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,))
         conn.execute("DELETE FROM purchase_invoices WHERE id=?", (invoice_id,))

@@ -50,7 +50,7 @@ class DashboardPage:
             row.addWidget(c)
         lay.addLayout(row)
 
-        lbl = QLabel("🏠  Live Room Status"); lbl.setObjectName("sec_title")
+        lbl = QLabel(tr("🏠  Live Room Status")); lbl.setObjectName("sec_title")
         lay.addWidget(lbl)
         self.room_grid = QGridLayout(); self.room_grid.setSpacing(12)
         lay.addLayout(self.room_grid)
@@ -240,16 +240,16 @@ class RoomsPage:
             else:
                 pts_note = ""
 
-            msg = (f"Session #{res['session_id']} Closed\n\n"
-                   f"Duration:     {res['duration_hours']:.2f} hrs\n"
-                   f"Room Charge:  {res['room_charge']:.2f} EGP\n"
-                   f"Snacks:       {res['snacks_total']:.2f} EGP\n"
-                   f"Discount:    -{res['discount']:.2f} EGP\n"
-                   f"Deposit:     -{res.get('deposit', 0.0):.2f} EGP\n"
+            msg = (f"{tr('Session Closed')} #{res['session_id']}\n\n"
+                   f"{tr('Duration')}:     {res['duration_hours']:.2f} {tr('hrs')}\n"
+                   f"{tr('Room Charge:')}  {res['room_charge']:.2f} {tr('EGP')}\n"
+                   f"{tr('Snacks')}:       {res['snacks_total']:.2f} {tr('EGP')}\n"
+                   f"{tr('Discount:')}    -{res['discount']:.2f} {tr('EGP')}\n"
+                   f"{tr('Deposit:')}     -{res.get('deposit', 0.0):.2f} {tr('EGP')}\n"
                    f"{'─'*30}\n"
-                   f"TOTAL:        {res['total_bill']:.2f} EGP"
+                   f"{tr('TOTAL:')}        {res['total_bill']:.2f} {tr('EGP')}"
                    + pts_note)
-            QMessageBox.information(self.page, "💰 Final Bill", msg)
+            QMessageBox.information(self.page, "💰 " + tr("TOTAL:"), msg)
             self.end_disc.setValue(0)
             if self._refresh_cb: self._refresh_cb()
         else:
@@ -382,7 +382,7 @@ class InventoryPage:
 
     def refresh(self):
         total_val = InventoryManager.get_total_inventory_value()
-        self.inv_val_lbl.setText(f"Total Value: {total_val:,.2f} EGP")
+        self.inv_val_lbl.setText(f"{tr('Total Value:')} {total_val:,.2f} {tr('EGP')}")
         
         prods = InventoryManager.get_all_products()
         self.prod_tbl.setRowCount(len(prods))
@@ -503,7 +503,7 @@ class ExpensesPage:
         for i, e in enumerate(exps):
             set_row(self.exp_tbl, i, [i+1, e[1], f"{e[2]:.2f}", e[3], e[4]])
         total = ExpenseManager.get_total_expenses()
-        self.total_lbl.setText(f"Total: {total:,.2f} EGP")
+        self.total_lbl.setText(f"{tr('Total:')} {total:,.2f} {tr('EGP')}")
 
     def handle_add(self):
         if self.exp_amt.value() <= 0:
@@ -551,12 +551,12 @@ class ReportsPage:
             row2.addWidget(c)
         lay.addLayout(row2)
 
-        lay.addWidget(QLabel("📊  Revenue per Room Type (Segment Reporting)", objectName="sec_title"))
+        lay.addWidget(QLabel(tr("📊  Revenue per Room Type (Segment Reporting)"), objectName="sec_title"))
         self.type_tbl = make_table([tr("Room Type"),tr("Revenue (EGP)"),tr("% of Total")])
         self.type_tbl.setMaximumHeight(150)
         lay.addWidget(self.type_tbl)
 
-        lay.addWidget(QLabel("🏠  Revenue per Room", objectName="sec_title"))
+        lay.addWidget(QLabel(tr("🏠  Revenue per Room"), objectName="sec_title"))
         self.room_tbl = make_table([tr("Room"),tr("Revenue (EGP)")])
         self.room_tbl.setMaximumHeight(200)
         lay.addWidget(self.room_tbl)
@@ -743,7 +743,7 @@ class SalesInvoicePage:
 
     def _update_total(self):
         total = sum(e['qty'].value() * e['price'].value() for e in self.item_rows)
-        self.total_lbl.setText(f"Total: {total:.2f} EGP")
+        self.total_lbl.setText(f"{tr('Total:')} {total:.2f} {tr('EGP')}")
 
     def _on_inv_select(self):
         row = self.inv_tbl.currentRow()
@@ -754,8 +754,8 @@ class SalesInvoicePage:
         date = self.inv_tbl.item(row, 2).text()
         tot  = self.inv_tbl.item(row, 3).text()
         stat = self.inv_tbl.item(row, 4).text()
-        self.detail_title.setText(f"Invoice #{row+1}  —  {cust}")
-        self.detail_info.setText(f"Date: {date}   Total: {tot} EGP   Status: {stat}")
+        self.detail_title.setText(f"{tr('Invoice')} #{row+1}  —  {cust}")
+        self.detail_info.setText(f"{tr('Date:')} {date}   {tr('Total:')} {tot} {tr('EGP')}   {tr('Status:')} {tr(stat)}")
         items = SalesInvoiceManager.get_invoice_items(iid)
         self.detail_tbl.setRowCount(len(items))
         for i, (name, qty, price, total) in enumerate(items):
@@ -798,7 +798,7 @@ class SalesInvoicePage:
 
             if price <= 0:
                 return QMessageBox.warning(self.page, tr("Invalid Price"),
-                    f"Price for '{e['prod'].currentText().split('[')[0].strip()}' must be > 0 EGP.")
+                    f"{tr('Price')} > 0 {tr('EGP')}.")
             
             if price < unit_cost:
                 requires_override = True
@@ -895,7 +895,7 @@ class PurchaseInvoicePage:
         left = QWidget(); left.setObjectName("card")
         ll = QVBoxLayout(left); ll.setContentsMargins(16,16,16,16); ll.setSpacing(10)
 
-        ll.addWidget(QLabel("📋  Purchase History", objectName="sec_title"))
+        ll.addWidget(QLabel(tr("📋  Purchase History"), objectName="sec_title"))
         self.inv_tbl = make_table(["#",tr("Supplier"),tr("Date"),tr("Total EGP"),tr("Status")])
         self.inv_tbl.itemSelectionChanged.connect(self._on_inv_select)
         ll.addWidget(self.inv_tbl)
@@ -929,7 +929,7 @@ class PurchaseInvoicePage:
         rl = QVBoxLayout(right); rl.setContentsMargins(18,18,18,20); rl.setSpacing(14)
 
         hdr = QHBoxLayout()
-        hdr.addWidget(QLabel("➕  Add Purchase Invoice", objectName="sec_title"))
+        hdr.addWidget(QLabel(tr("➕  Add Purchase Invoice"), objectName="sec_title"))
         hdr.addStretch()
         self.inv_val_lbl = QLabel(tr("Total Inventory Value: 0.00 EGP"))
         self.inv_val_lbl.setStyleSheet("font-weight:bold; color:#3ecf8e; font-size:14px;")
@@ -1053,7 +1053,7 @@ class PurchaseInvoicePage:
 
     def _update_total(self):
         total = sum(e['qty'].value() * e['cost'].value() for e in self.item_rows)
-        self.total_lbl.setText(f"Total: {total:.2f} EGP")
+        self.total_lbl.setText(f"{tr('Total:')} {total:.2f} {tr('EGP')}")
 
     def _on_inv_select(self):
         row = self.inv_tbl.currentRow()
@@ -1064,8 +1064,8 @@ class PurchaseInvoicePage:
         date = self.inv_tbl.item(row, 2).text()
         tot  = self.inv_tbl.item(row, 3).text()
         stat = self.inv_tbl.item(row, 4).text()
-        self.detail_title.setText(f"Invoice #{row+1}  —  {sup}")
-        self.detail_info.setText(f"Date: {date}   Total: {tot} EGP   Status: {stat}")
+        self.detail_title.setText(f"{tr('Invoice')} #{row+1}  —  {sup}")
+        self.detail_info.setText(f"{tr('Date:')} {date}   {tr('Total:')} {tot} {tr('EGP')}   {tr('Status:')} {tr(stat)}")
         items = PurchaseInvoiceManager.get_invoice_items(iid)
         self.detail_tbl.setRowCount(len(items))
         for i, (name, qty, cost, total) in enumerate(items):
@@ -1074,7 +1074,7 @@ class PurchaseInvoicePage:
 
     def refresh(self):
         total_val = InventoryManager.get_total_inventory_value()
-        self.inv_val_lbl.setText(f"Total Inventory Value: {total_val:,.2f} EGP")
+        self.inv_val_lbl.setText(f"{tr('Total Inventory Value:')} {total_val:,.2f} {tr('EGP')}")
         
         sups = PurchaseInvoiceManager.get_suppliers()
         self.sup_combo.clear()
@@ -1187,13 +1187,13 @@ class AccountingPage:
         self.je_tbl.itemSelectionChanged.connect(self._on_je_select)
         jl.addWidget(self.je_tbl)
 
-        jl.addWidget(QLabel("📝  Entry Detail Lines (select entry above)", objectName="sec_title"))
+        jl.addWidget(QLabel(tr("📒  Entry Detail Lines (select entry above)"), objectName="sec_title"))
         self.je_detail_tbl = make_table([tr("Account"),tr("Debit"),tr("Credit")])
         self.je_detail_tbl.setMaximumHeight(120)
         jl.addWidget(self.je_detail_tbl)
 
         jl.addWidget(make_divider())
-        jl.addWidget(QLabel("➕  New Journal Entry", objectName="sec_title"))
+        jl.addWidget(QLabel(tr("➕  New Journal Entry"), objectName="sec_title"))
         f = QFormLayout(); f.setSpacing(8)
         self.je_desc   = QLineEdit(); self.je_desc.setPlaceholderText(tr("Description..."))
         self.je_entity = QLineEdit(); self.je_entity.setPlaceholderText(tr("Entity (customer/supplier name)..."))
@@ -1211,13 +1211,13 @@ class AccountingPage:
         f.addRow(tr("Credit Amount:"), self.je_cr)
         jl.addLayout(f)
         btn_row = QHBoxLayout()
-        btn = QPushButton("💾 Save Entry"); btn.setObjectName("primary")
+        btn = QPushButton(tr("💾 Save Entry")); btn.setObjectName("primary")
         btn.setCursor(Qt.PointingHandCursor); btn.clicked.connect(self.handle_add_je)
         add_acc_btn = QPushButton(tr("➕ Add Account")); add_acc_btn.setObjectName("secondary")
         add_acc_btn.setCursor(Qt.PointingHandCursor); add_acc_btn.clicked.connect(self.handle_add_account)
         btn_row.addWidget(btn); btn_row.addStretch(); btn_row.addWidget(add_acc_btn)
         jl.addLayout(btn_row)
-        self.tabs.addTab(self.je_tab, "📒 Journal Entries")
+        self.tabs.addTab(self.je_tab, tr("📒  Journal Entries"))
 
         # ── Tab 2: General Ledger ──────────────────────────────────────────
         self.gl_tab = QWidget()
@@ -1234,11 +1234,11 @@ class AccountingPage:
         self._gl_data   = []
 
         FILTER_OPTIONS = [
-            (tr("All"),                 "🔘 All Accounts"),
-            (tr("Accounts Payable"),    "📤 Accounts Payable"),
-            ("Accounts Receivable", "📥 Accounts Receivable"),
-            ("Sales Revenue",       "💰 Sales Revenue"),
-            (tr("Inventory"),           "📦 Inventory"),
+            (tr("All"),                 "🔘 " + tr("All Accounts")),
+            (tr("Accounts Payable"),    "📤 " + tr("Accounts Payable")),
+            (tr("Accounts Receivable"), "📥 " + tr("Accounts Receivable")),
+            (tr("Sales Revenue"),       "💰 " + tr("Sales Revenue")),
+            (tr("Inventory"),           "📦 " + tr("Inventory")),
         ]
         self._gl_filter_btns = {}
         for key, label in FILTER_OPTIONS:
@@ -1276,7 +1276,7 @@ class AccountingPage:
 
         self.gl_tbl = make_table([tr("Entry#"),tr("Account"),tr("Date"),tr("Description"),tr("Entity"),tr("Debit"),tr("Credit"),tr("Reference")])
         gl.addWidget(self.gl_tbl)
-        self.tabs.addTab(self.gl_tab, "📖 General Ledger")
+        self.tabs.addTab(self.gl_tab, tr("📖  General Ledger"))
 
         # ── Tab 3: Income Statement ────────────────────────────────────────
         self.is_tab = QWidget()
@@ -1291,7 +1291,7 @@ class AccountingPage:
         is_cols = QHBoxLayout(); is_cols.setSpacing(14)
         rev_w = QWidget(); rev_w.setObjectName("card")
         rv = QVBoxLayout(rev_w); rv.setContentsMargins(10,8,10,8)
-        rv.addWidget(QLabel("🟢  Revenues", objectName="sec_title"))
+        rv.addWidget(QLabel(tr("💰  Revenues"), objectName="sec_title"))
         self.is_rev_tbl = make_table([tr("Account"),tr("Amount (EGP)")])
         rv.addWidget(self.is_rev_tbl)
         self.is_rev_total = QLabel(tr("Total: 0.00"))
@@ -1311,7 +1311,7 @@ class AccountingPage:
         self.is_net_lbl = QLabel(""); self.is_net_lbl.setAlignment(Qt.AlignCenter)
         self.is_net_lbl.setStyleSheet("font-size:15px;font-weight:800;padding:6px;")
         il.addWidget(self.is_net_lbl)
-        self.tabs.addTab(self.is_tab, "💰 Income Statement")
+        self.tabs.addTab(self.is_tab, tr("💰  Income Statement"))
 
         # ── Tab 4: Balance Sheet ───────────────────────────────────────────
         self.bs_tab = QWidget()
@@ -1326,7 +1326,7 @@ class AccountingPage:
         bs_cols = QHBoxLayout(); bs_cols.setSpacing(14)
         a_w = QWidget(); a_w.setObjectName("card")
         av = QVBoxLayout(a_w); av.setContentsMargins(10,8,10,8)
-        av.addWidget(QLabel("🟢  Assets", objectName="sec_title"))
+        av.addWidget(QLabel(tr("🏦  Assets"), objectName="sec_title"))
         self.bs_a_tbl = make_table([tr("Account"),tr("Balance (EGP)")])
         av.addWidget(self.bs_a_tbl)
         self.bs_a_total = QLabel(tr("Total: 0.00"))
@@ -1345,7 +1345,7 @@ class AccountingPage:
         
         lv.addWidget(make_divider())
         
-        lv.addWidget(QLabel("🔴  Liabilities", objectName="sec_title"))
+        lv.addWidget(QLabel(tr("🔴  Liabilities"), objectName="sec_title"))
         self.bs_l_tbl = make_table([tr("Account"),tr("Balance (EGP)")])
         lv.addWidget(self.bs_l_tbl)
         self.bs_l_total = QLabel(tr("Total: 0.00"))
@@ -1354,7 +1354,7 @@ class AccountingPage:
         
         bs_cols.addWidget(le_w)
         bl.addLayout(bs_cols)
-        self.tabs.addTab(self.bs_tab, "📊 Balance Sheet")
+        self.tabs.addTab(self.bs_tab, tr("📊  Balance Sheet"))
 
         # ── Tab 5: Trial Balance ───────────────────────────────────────────
         self.tb_tab = QWidget()
@@ -1369,7 +1369,7 @@ class AccountingPage:
         self.tb_cr_lbl.setStyleSheet("font-size:14px; font-weight:700; color:#f06292;")
         sr3.addWidget(self.tb_dr_lbl); sr3.addStretch(); sr3.addWidget(self.tb_cr_lbl)
         tl.addLayout(sr3)
-        self.tabs.addTab(self.tb_tab, "⚖️ Trial Balance")
+        self.tabs.addTab(self.tb_tab, tr("⚖️  Trial Balance"))
 
         self._je_ids = []
 
@@ -1428,30 +1428,30 @@ class AccountingPage:
         self.is_rev_tbl.setRowCount(len(inc['revenues']))
         for i, r in enumerate(inc['revenues']):
             set_row(self.is_rev_tbl, i, [r[0], f"{r[1]:,.2f}"])
-        self.is_rev_total.setText(f"Total Revenue: {tr_val:,.2f} EGP")
+        self.is_rev_total.setText(f"{tr('Total Revenue:')} {tr_val:,.2f} EGP")
         exp_rows = list(inc['expenses'])
         if inc['system_expenses'] > 0:
-            exp_rows.append(('System Expenses (Rent/Utils)', inc['system_expenses']))
+            exp_rows.append((tr('System Expenses (Rent/Utils)'), inc['system_expenses']))
         self.is_exp_tbl.setRowCount(len(exp_rows))
         for i, e in enumerate(exp_rows):
             set_row(self.is_exp_tbl, i, [e[0], f"{e[1]:,.2f}"])
-        self.is_exp_total.setText(f"Total Expenses: {te_val:,.2f} EGP")
+        self.is_exp_total.setText(f"{tr('Total Expenses:')} {te_val:,.2f} EGP")
         color = "#3ecf8e" if ni >= 0 else "#f06292"
-        sign  = tr("Profit") if ni >= 0 else "Loss"
-        self.is_net_lbl.setText(f"Net {sign}: {abs(ni):,.2f} EGP")
+        sign  = tr("Profit") if ni >= 0 else tr("Loss")
+        self.is_net_lbl.setText(f"{tr('Net')} {sign}: {abs(ni):,.2f} EGP")
         self.is_net_lbl.setStyleSheet(f"font-size:15px;font-weight:800;padding:6px;color:{color};")
 
         # Balance sheet
         bs = AccountingManager.get_balance_sheet()
         asset_rows = list(bs.get(tr("Asset"), []))
         if bs['cash_balance'] != 0:
-            asset_rows.append(('Cash & Cash Equivalents', bs['cash_balance']))
+            asset_rows.append((tr('Cash & Cash Equivalents'), bs['cash_balance']))
         ta = sum(a[1] for a in asset_rows)
         self.bs_asset.update_value(f"{ta:,.2f} EGP")
         self.bs_a_tbl.setRowCount(len(asset_rows))
         for i, a in enumerate(asset_rows):
             set_row(self.bs_a_tbl, i, [a[0], f"{a[1]:,.2f}"])
-        self.bs_a_total.setText(f"Total Assets: {ta:,.2f} EGP")
+        self.bs_a_total.setText(f"{tr('Total Assets:')} {ta:,.2f} EGP")
 
         liab_rows = list(bs.get(tr("Liability"), []))
         unpaid_purchase = bs.get('accounts_payable', 0)
@@ -1462,16 +1462,16 @@ class AccountingPage:
         self.bs_l_tbl.setRowCount(len(liab_rows))
         for i, l in enumerate(liab_rows):
             set_row(self.bs_l_tbl, i, [l[0], f"{abs(l[1]):,.2f}"])
-        self.bs_l_total.setText(f"Total Liabilities: {tl_val:,.2f} EGP")
+        self.bs_l_total.setText(f"{tr('Total Liabilities:')} {tl_val:,.2f} EGP")
 
         eq_rows = list(bs.get(tr("Equity"), []))
-        eq_rows.append(('Current Year Net Income', ni))
+        eq_rows.append((tr('Current Year Net Income'), ni))
         te = sum(e[1] for e in eq_rows)
         self.bs_eq.update_value(f"{te:,.2f} EGP")
         self.bs_e_tbl.setRowCount(len(eq_rows))
         for i, e in enumerate(eq_rows):
             set_row(self.bs_e_tbl, i, [e[0], f"{e[1]:,.2f}"])
-        self.bs_e_total.setText(f"Total Equity: {te:,.2f} EGP")
+        self.bs_e_total.setText(f"{tr('Total Equity:')} {te:,.2f} EGP")
 
         # Trial balance
         tb = AccountingManager.get_trial_balance()
@@ -1480,8 +1480,8 @@ class AccountingPage:
         for i, t in enumerate(tb):
             set_row(self.tb_tbl, i, [t[0], f"{t[1]:,.2f}", f"{t[2]:,.2f}"])
             td += t[1]; tc += t[2]
-        self.tb_dr_lbl.setText(f"Total Debit: {td:,.2f}")
-        self.tb_cr_lbl.setText(f"Total Credit: {tc:,.2f}")
+        self.tb_dr_lbl.setText(f"{tr('Total Debit:')} {td:,.2f}")
+        self.tb_cr_lbl.setText(f"{tr('Total Credit:')} {tc:,.2f}")
 
     # ── Add Journal Entry ──────────────────────────────────────────────────
     def handle_add_je(self):
@@ -1660,7 +1660,7 @@ class LoyaltyPage:
 
         left = QWidget(); left.setObjectName("card")
         ll = QVBoxLayout(left); ll.setContentsMargins(16, 16, 16, 16)
-        ll.addWidget(QLabel("🏆  Leaderboard", objectName="sec_title"))
+        ll.addWidget(QLabel(tr("🏆  Leaderboard"), objectName="sec_title"))
         self.tbl = make_table(["#", tr("Customer"), tr("Points"), tr("Tier"), tr("Total Spent")])
         ll.addWidget(self.tbl)
         grid.addWidget(left, 3)
@@ -1680,8 +1680,8 @@ class LoyaltyPage:
 
         self.cust_name_lbl = QLabel("—"); self.cust_name_lbl.setStyleSheet("font-size:16px; font-weight:700;")
         self.tier_lbl  = QLabel("—"); self.tier_lbl.setStyleSheet("font-size:13px;")
-        self.pts_lbl   = QLabel("Points: —"); self.pts_lbl.setStyleSheet("font-size:13px;")
-        self.spent_lbl = QLabel("Spent: —"); self.spent_lbl.setStyleSheet("font-size:11px; color:#6b7a99;")
+        self.pts_lbl   = QLabel(tr("Points: —")); self.pts_lbl.setStyleSheet("font-size:13px;")
+        self.spent_lbl = QLabel(tr("Spent: —")); self.spent_lbl.setStyleSheet("font-size:11px; color:#6b7a99;")
         self.progress  = QProgressBar()
         self.progress.setMaximumHeight(8)
         self.progress.setTextVisible(False)
@@ -1697,7 +1697,7 @@ class LoyaltyPage:
         rl.addWidget(self.next_lbl)
 
         rl.addWidget(make_divider())
-        rl.addWidget(QLabel("🎁  Redeem Points", objectName="sec_title"))
+        rl.addWidget(QLabel(tr("🎁  Redeem Points"), objectName="sec_title"))
         f = QFormLayout(); f.setSpacing(8)
         self.redeem_pts = QSpinBox(); self.redeem_pts.setMaximum(999999)
         f.addRow(tr("Points to Redeem:"), self.redeem_pts)
@@ -1764,8 +1764,8 @@ class LoyaltyPage:
         self.cust_name_lbl.setStyleSheet(f"font-size:16px; font-weight:700; color:{color};")
         self.tier_lbl.setText(f"{icon} {tier}")
         self.tier_lbl.setStyleSheet(f"font-size:13px; color:{color};")
-        self.pts_lbl.setText(f"Points: {pts:,}")
-        self.spent_lbl.setText(f"Total Spent: {spent:,.2f} EGP")
+        self.pts_lbl.setText(f"{tr('Points:')} {pts:,}")
+        self.spent_lbl.setText(f"{tr('Total Spent:')} {spent:,.2f} {tr('EGP')}")
         if next_tier:
             next_threshold = next((t for _, t, _ in LoyaltyManager.TIERS if _ and t > pts), pts)
             prev_threshold = pts - pts_next if pts_next > 0 else pts
@@ -1856,7 +1856,7 @@ class SettingsPage:
         rl.addWidget(make_divider())
         rl.addWidget(QLabel(tr("⚠️  Danger Zone"), objectName="sec_title"))
         
-        rst_lbl = QLabel("Clears the notification dedup cache\nso alerts can show again.")
+        rst_lbl = QLabel(tr("Clears the notification dedup cache\nso alerts can show again."))
         rst_lbl.setStyleSheet("font-size:11px; color:#6b7a99;"); rst_lbl.setWordWrap(True)
         rl.addWidget(rst_lbl)
         rst_btn = QPushButton(tr("🔄  Reset Alerts")); rst_btn.setObjectName("secondary")
