@@ -20,7 +20,6 @@ from styles import get_qss
 from widgets import NavButton
 from core import SettingsManager, NotificationManager, UserManager
 from translations import tr, set_lang, current_lang, is_arabic
-from PyQt5.QtGui import QFont
 
 from pages import (
     DashboardPage, RoomsPage, InventoryPage, ExpensesPage, ReportsPage,
