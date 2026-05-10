@@ -427,6 +427,9 @@ class AISApp(QMainWindow):
         # Sales: price cannot be edited by employees
         self.pg_sales.set_readonly(True)
 
+        # Rooms: room adding and editing restricted for employees
+        self.pg_rooms.set_readonly(True)
+
         # If somehow on a hidden page, go to dashboard
         if self.stack.currentIndex() in self.EMPLOYEE_HIDDEN:
             self.switch_page(0)

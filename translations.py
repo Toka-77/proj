@@ -462,6 +462,26 @@ TRANSLATIONS = {
     "Net Profit:":            "صافي الربح:",
     "Net Loss:":              "صافي الخسارة:",
     "Profit":                 "ربح",
+
+    # ── Chart of Accounts (DB-stored names → Arabic) ─────────────────────────
+    "Cash":                   "النقدية",
+    "Prepaid Expenses":       "مصروفات مدفوعة مقدماً",
+    "Accrued Expenses":       "مصروفات مستحقة",
+    "Unearned Revenue":       "إيرادات غير مكتسبة",
+    "Owner Equity":           "حقوق المالك",
+    "Current Year Earnings":  "أرباح السنة الحالية",
+    "Sales Revenue":          "إيرادات المبيعات",
+    "Service Revenue":        "إيرادات الخدمات",
+    "Room Revenue":           "إيرادات الغرف",
+    "Cost of Goods Sold":     "تكلفة البضاعة المباعة",
+    "Rent Expense":           "مصروف الإيجار",
+    "Salaries Expense":       "مصروف الرواتب",
+    "Utilities Expense":      "مصروف المرافق",
+    "Supplies Expense":       "مصروف المستلزمات",
+    "Depreciation":           "الاستهلاك",
+    "Other Expenses":         "مصروفات أخرى",
+    "COGS":                   "تكلفة البضاعة",
+    "Direct Sale":            "بيع مباشر",
 }
 
 def set_lang(lang: str):

@@ -101,16 +101,16 @@ class RoomsPage:
         self.rooms_tbl.itemSelectionChanged.connect(self._on_room_select)
         ll.addWidget(self.rooms_tbl)
         
-        edit_btn = QPushButton(tr("✏️ Edit Selected Room Price"))
-        edit_btn.setObjectName("secondary")
-        edit_btn.setCursor(Qt.PointingHandCursor)
-        edit_btn.clicked.connect(self.handle_edit_room)
-        ll.addWidget(edit_btn)
-        add_room_btn = QPushButton(tr("➕ Add New Room"))
-        add_room_btn.setObjectName("primary")
-        add_room_btn.setCursor(Qt.PointingHandCursor)
-        add_room_btn.clicked.connect(self.handle_add_room)
-        ll.addWidget(add_room_btn)
+        self.edit_btn = QPushButton(tr("✏️ Edit Selected Room Price"))
+        self.edit_btn.setObjectName("secondary")
+        self.edit_btn.setCursor(Qt.PointingHandCursor)
+        self.edit_btn.clicked.connect(self.handle_edit_room)
+        ll.addWidget(self.edit_btn)
+        self.add_room_btn = QPushButton(tr("➕ Add New Room"))
+        self.add_room_btn.setObjectName("primary")
+        self.add_room_btn.setCursor(Qt.PointingHandCursor)
+        self.add_room_btn.clicked.connect(self.handle_add_room)
+        ll.addWidget(self.add_room_btn)
         
         grid.addWidget(left, 3)
 
@@ -159,6 +159,10 @@ class RoomsPage:
         lay.addWidget(pdf_btn)
 
         self._refresh_cb = None
+
+    def set_readonly(self, readonly: bool):
+        self.edit_btn.setVisible(not readonly)
+        self.add_room_btn.setVisible(not readonly)
 
     def _on_room_select(self):
         row = self.rooms_tbl.currentRow()
@@ -439,15 +443,15 @@ class InventoryPage:
                 QMessageBox.warning(self.page, tr("Error"), msg)
 
     def set_readonly(self, readonly: bool):
-        self.upd_btn.setEnabled(not readonly)
-        self.del_btn.setEnabled(not readonly)
+        self.upd_btn.setVisible(not readonly)
+        self.del_btn.setVisible(not readonly)
         self.new_price.setEnabled(not readonly)
         self.new_cost.setEnabled(not readonly)
+        self.sel_name.setReadOnly(readonly)
         if readonly:
-            self.upd_btn.setToolTip("🔒 Admin only")
-            self.del_btn.setToolTip("🔒 Admin only")
             self.new_price.setToolTip("🔒 Admin only — price editing restricted")
             self.new_cost.setToolTip("🔒 Admin only — cost editing restricted")
+            self.sel_name.setToolTip("🔒 Admin only — name editing restricted")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1380,11 +1384,11 @@ class AccountingPage:
         for k, btn in self._gl_filter_btns.items():
             btn.setChecked(k == key)
 
-        rows = self._gl_data if key == tr("All") else [g for g in self._gl_data if g[1] == key]
+        rows = self._gl_data if key == tr("All") else [g for g in self._gl_data if tr(g[1]) == key]
 
         self.gl_tbl.setRowCount(len(rows))
         for i, g in enumerate(rows):
-            set_row(self.gl_tbl, i, [g[0], g[1], g[2], g[3], g[4],
+            set_row(self.gl_tbl, i, [g[0], tr(g[1]), g[2], g[3], g[4],
                                       f"{g[5]:.2f}", f"{g[6]:.2f}", g[7]])
 
     # ── Journal Entry Selection ────────────────────────────────────────────
@@ -1396,7 +1400,7 @@ class AccountingPage:
         lines = AccountingManager.get_journal_lines(eid)
         self.je_detail_tbl.setRowCount(len(lines))
         for i, (acc, dr, cr) in enumerate(lines):
-            set_row(self.je_detail_tbl, i, [acc, f"{dr:,.2f}", f"{cr:,.2f}"])
+            set_row(self.je_detail_tbl, i, [tr(acc), f"{dr:,.2f}", f"{cr:,.2f}"])
 
     # ── Refresh ────────────────────────────────────────────────────────────
     def refresh(self):
@@ -1427,14 +1431,14 @@ class AccountingPage:
         self.is_net.update_title(tr("Net Profit") if ni >= 0 else tr("Net Loss"))
         self.is_rev_tbl.setRowCount(len(inc['revenues']))
         for i, r in enumerate(inc['revenues']):
-            set_row(self.is_rev_tbl, i, [r[0], f"{r[1]:,.2f}"])
+            set_row(self.is_rev_tbl, i, [tr(r[0]), f"{r[1]:,.2f}"])
         self.is_rev_total.setText(f"{tr('Total Revenue:')} {tr_val:,.2f} EGP")
         exp_rows = list(inc['expenses'])
         if inc['system_expenses'] > 0:
             exp_rows.append((tr('System Expenses (Rent/Utils)'), inc['system_expenses']))
         self.is_exp_tbl.setRowCount(len(exp_rows))
         for i, e in enumerate(exp_rows):
-            set_row(self.is_exp_tbl, i, [e[0], f"{e[1]:,.2f}"])
+            set_row(self.is_exp_tbl, i, [tr(e[0]), f"{e[1]:,.2f}"])
         self.is_exp_total.setText(f"{tr('Total Expenses:')} {te_val:,.2f} EGP")
         color = "#3ecf8e" if ni >= 0 else "#f06292"
         sign  = tr("Profit") if ni >= 0 else tr("Loss")
@@ -1450,7 +1454,7 @@ class AccountingPage:
         self.bs_asset.update_value(f"{ta:,.2f} EGP")
         self.bs_a_tbl.setRowCount(len(asset_rows))
         for i, a in enumerate(asset_rows):
-            set_row(self.bs_a_tbl, i, [a[0], f"{a[1]:,.2f}"])
+            set_row(self.bs_a_tbl, i, [tr(a[0]), f"{a[1]:,.2f}"])
         self.bs_a_total.setText(f"{tr('Total Assets:')} {ta:,.2f} EGP")
 
         liab_rows = list(bs.get(tr("Liability"), []))
@@ -1461,7 +1465,7 @@ class AccountingPage:
         self.bs_liab.update_value(f"{tl_val:,.2f} EGP")
         self.bs_l_tbl.setRowCount(len(liab_rows))
         for i, l in enumerate(liab_rows):
-            set_row(self.bs_l_tbl, i, [l[0], f"{abs(l[1]):,.2f}"])
+            set_row(self.bs_l_tbl, i, [tr(l[0]), f"{abs(l[1]):,.2f}"])
         self.bs_l_total.setText(f"{tr('Total Liabilities:')} {tl_val:,.2f} EGP")
 
         eq_rows = list(bs.get(tr("Equity"), []))
@@ -1470,7 +1474,7 @@ class AccountingPage:
         self.bs_eq.update_value(f"{te:,.2f} EGP")
         self.bs_e_tbl.setRowCount(len(eq_rows))
         for i, e in enumerate(eq_rows):
-            set_row(self.bs_e_tbl, i, [e[0], f"{e[1]:,.2f}"])
+            set_row(self.bs_e_tbl, i, [tr(e[0]), f"{e[1]:,.2f}"])
         self.bs_e_total.setText(f"{tr('Total Equity:')} {te:,.2f} EGP")
 
         # Trial balance
@@ -1478,7 +1482,7 @@ class AccountingPage:
         self.tb_tbl.setRowCount(len(tb))
         td, tc = 0, 0
         for i, t in enumerate(tb):
-            set_row(self.tb_tbl, i, [t[0], f"{t[1]:,.2f}", f"{t[2]:,.2f}"])
+            set_row(self.tb_tbl, i, [tr(t[0]), f"{t[1]:,.2f}", f"{t[2]:,.2f}"])
             td += t[1]; tc += t[2]
         self.tb_dr_lbl.setText(f"{tr('Total Debit:')} {td:,.2f}")
         self.tb_cr_lbl.setText(f"{tr('Total Credit:')} {tc:,.2f}")
