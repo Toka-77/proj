@@ -39,7 +39,10 @@ class RoomManager:
     def get_all_rooms():
         """Returns all rooms: (id, name, type, status, base_price, capacity, description)"""
         conn = get_connection()
-        rows = conn.execute("SELECT id, name, type, status, base_price, capacity, description FROM rooms ORDER BY type, name").fetchall()
+        rows = conn.execute("""
+            SELECT id, name, type, status, base_price, capacity, description FROM rooms
+            ORDER BY CASE type WHEN 'Study' THEN 1 WHEN 'Gaming' THEN 2 WHEN 'Cinema' THEN 3 ELSE 4 END, name
+        """).fetchall()
         conn.close()
         return rows
 
@@ -82,6 +85,22 @@ class RoomManager:
         conn.commit()
         conn.close()
         return True
+
+    @staticmethod
+    def add_room(name, room_type, base_price, capacity=10, description=''):
+        conn = get_connection()
+        existing = conn.execute("SELECT id FROM rooms WHERE LOWER(name)=LOWER(?)", (name,)).fetchone()
+        if existing:
+            conn.close()
+            return False, f"A room named '{name}' already exists."
+        conn.execute(
+            "INSERT INTO rooms (name, type, status, base_price, capacity, description) VALUES (?,?,?,?,?,?)",
+            (name, room_type, 'Available', base_price, capacity, description)
+        )
+        conn.commit()
+        conn.close()
+        return True, f"Room '{name}' added successfully."
+
 
     @staticmethod
     def live_status():
@@ -383,17 +402,18 @@ class InventoryManager:
             (product_sku, session_id, quantity, price, total_price, sale_time)
         )
         
-        # Record COGS and Inventory reduction
-        conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
-                     (sale_time, f"COGS for {quantity}x {name}", f"COGS-{product_sku}"))
-        je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                     (je_id, 'Cost of Goods Sold', cogs_total, 0))
-        conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
-                     (je_id, 'Inventory', 0, cogs_total))
-
-        # If it's a direct sale (no session), also record Revenue and Cash
+        # Record COGS journal only for direct sales (no session)
+        # For session-linked sales, revenue/COGS are handled by end_session journal
         if not session_id:
+            conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
+                         (sale_time, f"COGS for {quantity}x {name}", f"COGS-{product_sku}"))
+            je_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Cost of Goods Sold', cogs_total, 0))
+            conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                         (je_id, 'Inventory', 0, cogs_total))
+            
+            # Also record Revenue and Cash for direct sales
             conn.execute("INSERT INTO journal_entries (entry_date, description, reference) VALUES (?,?,?)",
                          (sale_time, f"Direct Sale {quantity}x {name}", f"DSALE-{product_sku}"))
             je_id2 = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -751,7 +771,7 @@ class SalesInvoiceManager:
     def get_invoice_items(invoice_id):
         conn = get_connection()
         rows = conn.execute('''
-            SELECT si.id, p.name, si.quantity, si.unit_price, si.total
+            SELECT p.name, si.quantity, si.unit_price, si.total
             FROM sales_invoice_items si JOIN products p ON si.product_sku = p.sku
             WHERE si.invoice_id = ?
         ''', (invoice_id,)).fetchall()
@@ -1049,23 +1069,30 @@ class AccountingManager:
     @staticmethod
     def get_income_statement():
         conn = get_connection()
+        # Only include entries AFTER the last closing entry
+        last_close = conn.execute(
+            "SELECT entry_date FROM journal_entries WHERE reference='CLOSE-YR' ORDER BY entry_date DESC LIMIT 1"
+        ).fetchone()
+        start_date = last_close[0] if last_close else '1970-01-01 00:00:00'
+
         # Revenue accounts
         rev = conn.execute('''
             SELECT jl.account, SUM(jl.credit) - SUM(jl.debit) as net
             FROM journal_lines jl
+            JOIN journal_entries je ON jl.entry_id = je.id
             JOIN chart_of_accounts ca ON jl.account = ca.account_name
-            WHERE ca.account_type = 'Revenue'
+            WHERE ca.account_type = 'Revenue' AND je.entry_date > ?
             GROUP BY jl.account
-        ''').fetchall()
+        ''', (start_date,)).fetchall()
         # Expense accounts
         exp = conn.execute('''
             SELECT jl.account, SUM(jl.debit) - SUM(jl.credit) as net
             FROM journal_lines jl
+            JOIN journal_entries je ON jl.entry_id = je.id
             JOIN chart_of_accounts ca ON jl.account = ca.account_name
-            WHERE ca.account_type = 'Expense'
+            WHERE ca.account_type = 'Expense' AND je.entry_date > ?
             GROUP BY jl.account
-        ''').fetchall()
-        # No more manual sys_exp, expenses are handled in journal entries
+        ''', (start_date,)).fetchall()
         conn.close()
         total_rev = sum(r[1] for r in rev)
         total_exp = sum(e[1] for e in exp)
@@ -1453,9 +1480,17 @@ class BookingManager:
             conn.execute("UPDATE bookings SET status='Cancelled' WHERE id=?", (booking_id,))
             if deposit > 0:
                 date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                lines = [('Unearned Revenue', deposit, 0.0), ('Cash', 0.0, deposit)]
-                AccountingManager.create_journal_entry("Booking Cancelled (Refund)", lines, f"BK-CANC-{booking_id}", "System")
-        conn.commit(); conn.close()
+                conn.execute(
+                    "INSERT INTO journal_entries (entry_date, description, reference, entity) VALUES (?,?,?,?)",
+                    (date, "Booking Cancelled (Refund)", f"BK-CANC-{booking_id}", "System")
+                )
+                eid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                             (eid, 'Unearned Revenue', deposit, 0.0))
+                conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
+                             (eid, 'Cash', 0.0, deposit))
+        conn.commit()
+        conn.close()
         return True, "Booking cancelled and deposit refunded (if any)."
 
     @staticmethod
@@ -1486,6 +1521,101 @@ class PDFGenerator:
             return True
         except ImportError:
             return False
+
+    @staticmethod
+    def generate_session_invoice(session_id):
+        if not PDFGenerator._check_fpdf():
+            return False, "fpdf2 not installed. Run: pip install fpdf2"
+        from fpdf import FPDF
+        import os
+
+        conn = get_connection()
+        s = conn.execute('''
+            SELECT s.id, r.name, s.customer_name, s.start_time, s.end_time,
+                   s.room_charge, s.snacks_total, s.discount, s.total_bill, s.deposit
+            FROM sessions s JOIN rooms r ON s.room_id = r.id
+            WHERE s.id = ?
+        ''', (session_id,)).fetchone()
+        
+        if not s or not s[4]:  # Ensure session is ended
+            conn.close()
+            return False, "Session not found or not yet ended."
+            
+        snacks = conn.execute('''
+            SELECT p.name, sa.qty_sold, sa.unit_price, sa.total_price
+            FROM sales sa JOIN products p ON sa.product_sku = p.sku
+            WHERE sa.session_id = ?
+        ''', (session_id,)).fetchall()
+        conn.close()
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
+
+        pdf.set_fill_color(28, 25, 55)
+        pdf.rect(0, 0, 210, 40, 'F')
+        pdf.set_font("helvetica", "B", 24)
+        pdf.set_text_color(62, 207, 142)
+        pdf.cell(0, 20, "AIS Hub", ln=True, align="C")
+        pdf.set_font("helvetica", "I", 12)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 5, "Session Invoice", ln=True, align="C")
+        pdf.ln(15)
+
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(44, 62, 80)
+        pdf.cell(0, 10, f"Invoice For Session #{s[0]}", ln=True)
+        pdf.set_font("helvetica", "", 11)
+        pdf.set_text_color(80, 80, 80)
+        
+        cname = s[2] if s[2] else 'Walk-in'
+        pdf.cell(0, 6, f"Customer: {cname}", ln=True)
+        pdf.cell(0, 6, f"Room: {s[1]}", ln=True)
+        pdf.cell(0, 6, f"Start Time: {s[3]}", ln=True)
+        pdf.cell(0, 6, f"End Time: {s[4]}", ln=True)
+        pdf.ln(10)
+
+        pdf.set_font("helvetica", "B", 12)
+        pdf.set_fill_color(240, 242, 245)
+        pdf.cell(100, 10, "Description", border=1, fill=True)
+        pdf.cell(40, 10, "Amount (EGP)", border=1, align="R", fill=True, ln=True)
+
+        pdf.set_font("helvetica", "", 11)
+        pdf.cell(100, 10, "Room Charge", border=1)
+        pdf.cell(40, 10, f"{s[5]:.2f}", border=1, align="R", ln=True)
+        
+        if snacks:
+            pdf.cell(100, 10, "Snacks/Drinks Total", border=1)
+            pdf.cell(40, 10, f"{s[6]:.2f}", border=1, align="R", ln=True)
+            for snk in snacks:
+                pdf.set_font("helvetica", "I", 10)
+                pdf.cell(10, 8, "", border=0)
+                pdf.cell(90, 8, f"- {snk[1]}x {snk[0]}", border=0)
+                pdf.cell(40, 8, f"{snk[3]:.2f}", border=0, align="R", ln=True)
+
+        pdf.set_font("helvetica", "", 11)
+        if s[7] > 0:
+            pdf.cell(100, 10, "Discount", border=1)
+            pdf.cell(40, 10, f"-{s[7]:.2f}", border=1, align="R", ln=True)
+            
+        if s[9] > 0:
+            pdf.cell(100, 10, "Deposit Paid", border=1)
+            pdf.cell(40, 10, f"-{s[9]:.2f}", border=1, align="R", ln=True)
+
+        pdf.set_font("helvetica", "B", 12)
+        pdf.set_text_color(28, 25, 55)
+        pdf.cell(100, 10, "Total Final Bill", border=1)
+        pdf.cell(40, 10, f"{s[8]:.2f}", border=1, align="R", ln=True)
+
+        pdf.ln(20)
+        pdf.set_font("helvetica", "I", 10)
+        pdf.set_text_color(150, 150, 150)
+        pdf.cell(0, 10, "Thank you for visiting AIS Hub!", align="C")
+
+        os.makedirs("invoices", exist_ok=True)
+        filename = f"invoices/session_{s[0]}.pdf"
+        pdf.output(filename)
+        return True, os.path.abspath(filename)
 
     @staticmethod
     def generate_sales_invoice(invoice_id):

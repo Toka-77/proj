@@ -105,6 +105,11 @@ class RoomsPage:
         edit_btn.setCursor(Qt.PointingHandCursor)
         edit_btn.clicked.connect(self.handle_edit_room)
         ll.addWidget(edit_btn)
+        add_room_btn = QPushButton("➕ Add New Room")
+        add_room_btn.setObjectName("primary")
+        add_room_btn.setCursor(Qt.PointingHandCursor)
+        add_room_btn.clicked.connect(self.handle_add_room)
+        ll.addWidget(add_room_btn)
         
         grid.addWidget(left, 3)
 
@@ -145,6 +150,12 @@ class RoomsPage:
         self.hist_tbl = make_table(["#","Room","Type","Customer","People","Start","End","Room $","Snacks","Disc","Total"])
         self.hist_tbl.setMaximumHeight(200)
         lay.addWidget(self.hist_tbl)
+        
+        pdf_btn = QPushButton("📄 Export Session Invoice (PDF)")
+        pdf_btn.setObjectName("secondary")
+        pdf_btn.setCursor(Qt.PointingHandCursor)
+        pdf_btn.clicked.connect(self.handle_pdf)
+        lay.addWidget(pdf_btn)
 
         self._refresh_cb = None
 
@@ -176,6 +187,7 @@ class RoomsPage:
             self.end_sess.addItem(f"#{s[0]}  {s[1]}  —  {s[2]}", s[0])
 
         hist = SessionManager.get_all_sessions(50)
+        self._hist_ids = [h[0] for h in hist]
         self.hist_tbl.setRowCount(len(hist))
         for i, h in enumerate(hist):
             set_row(self.hist_tbl, i, [i+1,h[1],h[2],h[3],h[4],h[5],h[6] or "Active",
@@ -185,6 +197,7 @@ class RoomsPage:
         rid = self.start_room.currentData()
         if not rid:
             return QMessageBox.warning(self.page, "Error", "No available room.")
+            
         cname = self.start_cust.text().strip()
         if not cname:
             return QMessageBox.warning(self.page, "Required", "Enter customer name.")
@@ -255,10 +268,49 @@ class RoomsPage:
             RoomManager.update_price(rid, new_price)
             self.refresh()
 
+    def handle_pdf(self):
+        row = self.hist_tbl.currentRow()
+        if row < 0 or row >= len(getattr(self, '_hist_ids', [])):
+            return QMessageBox.warning(self.page, "Error", "Select a session from the history table.")
+        sid = self._hist_ids[row]
+        from core import PDFGenerator
+        ok, result = PDFGenerator.generate_session_invoice(sid)
+        if ok:
+            QMessageBox.information(self.page, "✅ PDF Generated", f"Invoice saved at:\n{result}")
+            import os
+            os.startfile(result)
+        else:
+            QMessageBox.warning(self.page, "Error", result)
 
-# ═══════════════════════════════════════════════════════════════
-#  INVENTORY
-# ═══════════════════════════════════════════════════════════════
+
+    def handle_add_room(self):
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox
+        dlg = QDialog(self.page)
+        dlg.setWindowTitle("Add New Room")
+        dlg.setMinimumWidth(320)
+        fl = QFormLayout(dlg); fl.setSpacing(10); fl.setContentsMargins(16,16,16,16)
+        name_e = QLineEdit(); name_e.setPlaceholderText("e.g. Study Room C")
+        type_cb = QComboBox(); type_cb.addItems(["Study", "Gaming", "Cinema"])
+        price_e = QDoubleSpinBox(); price_e.setMaximum(9999); price_e.setDecimals(2); price_e.setPrefix("EGP ")
+        cap_e   = QSpinBox(); cap_e.setMinimum(1); cap_e.setMaximum(100); cap_e.setValue(10)
+        desc_e  = QLineEdit(); desc_e.setPlaceholderText("Optional description")
+        fl.addRow("Name:", name_e)
+        fl.addRow("Type:", type_cb)
+        fl.addRow("Price/hr:", price_e)
+        fl.addRow("Capacity:", cap_e)
+        fl.addRow("Description:", desc_e)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept); btns.rejected.connect(dlg.reject)
+        fl.addRow(btns)
+        if dlg.exec_() == QDialog.Accepted:
+            name = name_e.text().strip()
+            if not name:
+                return QMessageBox.warning(self.page, "Error", "Room name is required.")
+            ok, msg = RoomManager.add_room(name, type_cb.currentText(), price_e.value(), cap_e.value(), desc_e.text().strip())
+            QMessageBox.information(self.page, "✅", msg) if ok else QMessageBox.warning(self.page, "Error", msg)
+            self.refresh()
+
+    # ═══ INVENTORY ═══
 class InventoryPage:
     def __init__(self):
         self.page, lay = page_container("Snacks & Inventory")
@@ -294,11 +346,12 @@ class InventoryPage:
         f = QFormLayout(); f.setSpacing(10)
         self.sel_sku  = QLineEdit(); self.sel_sku.setReadOnly(True)
         self.sel_sku.setPlaceholderText("Auto-filled on row select")
-        self.sel_name = QLineEdit(); self.sel_name.setReadOnly(True)
+        self.sel_name = QLineEdit()
+        self.sel_name.setPlaceholderText("Product name (editable)")
         self.new_cost = QDoubleSpinBox(); self.new_cost.setMaximum(99999); self.new_cost.setPrefix("EGP ")
         self.new_price = QDoubleSpinBox(); self.new_price.setMaximum(99999); self.new_price.setPrefix("EGP ")
         f.addRow("SKU:",       self.sel_sku)
-        f.addRow("Product:",   self.sel_name)
+        f.addRow("Name:",      self.sel_name)
         f.addRow("Unit Cost:", self.new_cost)
         f.addRow("Sale Price:", self.new_price)
         rl.addLayout(f)
@@ -346,9 +399,20 @@ class InventoryPage:
         sku = self.sel_sku.text().strip()
         if not sku: return QMessageBox.warning(self.page, "Select Product", "Click a row first.")
         if self.new_price.value() <= 0: return QMessageBox.warning(self.page, "Invalid", "Price must be > 0.")
+        # Update name if changed
+        new_name = self.sel_name.text().strip()
+        if new_name:
+            conn = __import__('database').get_connection()
+            conn.execute("UPDATE products SET name=? WHERE sku=?", (new_name, sku))
+            conn.commit(); conn.close()
         ok, msg = InventoryManager.update_selling_price(sku, self.new_price.value())
+        # Also update cost
+        conn2 = __import__('database').get_connection()
+        conn2.execute("UPDATE products SET unit_cost=? WHERE sku=?", (self.new_cost.value(), sku))
+        conn2.commit(); conn2.close()
         if ok:
-            QMessageBox.information(self.page, "✅", msg); self.refresh()
+            QMessageBox.information(self.page, "✅", "Product updated.")
+            self.refresh()
             if self._refresh_cb: self._refresh_cb()
         else:
             QMessageBox.warning(self.page, "Error", msg)
@@ -1864,9 +1928,11 @@ class BookingPage:
         btn_row = QHBoxLayout()
         cancel_btn = QPushButton("❌  Cancel Booking"); cancel_btn.setObjectName("danger")
         cancel_btn.setCursor(Qt.PointingHandCursor); cancel_btn.clicked.connect(self.handle_cancel)
+        edit_bk_btn = QPushButton("✏️  Edit Booking"); edit_bk_btn.setObjectName("secondary")
+        edit_bk_btn.setCursor(Qt.PointingHandCursor); edit_bk_btn.clicked.connect(self.handle_edit_booking)
         to_sess_btn = QPushButton("▶  Convert to Session"); to_sess_btn.setObjectName("primary")
         to_sess_btn.setCursor(Qt.PointingHandCursor); to_sess_btn.clicked.connect(self.handle_to_session)
-        btn_row.addWidget(cancel_btn); btn_row.addStretch(); btn_row.addWidget(to_sess_btn)
+        btn_row.addWidget(cancel_btn); btn_row.addWidget(edit_bk_btn); btn_row.addStretch(); btn_row.addWidget(to_sess_btn)
         ll.addLayout(btn_row)
         grid.addWidget(left, 3)
 
@@ -1970,3 +2036,68 @@ class BookingPage:
             if self._refresh_cb: self._refresh_cb()
         else:
             QMessageBox.warning(self.page, "Error", msg)
+
+    def handle_edit_booking(self):
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox
+        row = self.book_tbl.currentRow()
+        if row < 0 or row >= len(self._booking_ids):
+            return QMessageBox.warning(self.page, "Error", "Select a booking to edit.")
+        bid = self._booking_ids[row]
+        # Get current booking data from DB
+        import database
+        conn = database.get_connection()
+        bk = conn.execute(
+            "SELECT room_id, customer_name, booking_date, start_time, end_time, num_people, notes FROM bookings WHERE id=?",
+            (bid,)
+        ).fetchone()
+        conn.close()
+        if not bk:
+            return QMessageBox.warning(self.page, "Error", "Booking not found.")
+
+        dlg = QDialog(self.page)
+        dlg.setWindowTitle(f"Edit Booking #{bid}")
+        dlg.setMinimumWidth(340)
+        fl = QFormLayout(dlg); fl.setSpacing(10); fl.setContentsMargins(16,16,16,16)
+
+        rooms = RoomManager.get_all_rooms()
+        room_cb = QComboBox()
+        for r in rooms:
+            room_cb.addItem(f"{r[1]}  ({r[2]})", r[0])
+        idx = room_cb.findData(bk[0])
+        if idx >= 0: room_cb.setCurrentIndex(idx)
+
+        cust_e  = QLineEdit(bk[1])
+        date_e  = QDateEdit(QDate.fromString(bk[2], "yyyy-MM-dd"))
+        date_e.setCalendarPopup(True); date_e.setDisplayFormat("yyyy-MM-dd")
+        start_e = QTimeEdit(QTime.fromString(bk[3], "HH:mm"))
+        start_e.setDisplayFormat("HH:mm")
+        end_e   = QTimeEdit(QTime.fromString(bk[4], "HH:mm"))
+        end_e.setDisplayFormat("HH:mm")
+        ppl_e   = QSpinBox(); ppl_e.setMinimum(1); ppl_e.setMaximum(50); ppl_e.setValue(bk[5])
+        notes_e = QLineEdit(bk[6] or "")
+
+        fl.addRow("Room:", room_cb)
+        fl.addRow("Customer:", cust_e)
+        fl.addRow("Date:", date_e)
+        fl.addRow("From:", start_e)
+        fl.addRow("To:", end_e)
+        fl.addRow("People:", ppl_e)
+        fl.addRow("Notes:", notes_e)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dlg.accept); btns.rejected.connect(dlg.reject)
+        fl.addRow(btns)
+
+        if dlg.exec_() == QDialog.Accepted:
+            conn2 = database.get_connection()
+            conn2.execute(
+                "UPDATE bookings SET room_id=?, customer_name=?, booking_date=?, start_time=?, end_time=?, num_people=?, notes=? WHERE id=?",
+                (room_cb.currentData(), cust_e.text().strip(),
+                 date_e.date().toString("yyyy-MM-dd"),
+                 start_e.time().toString("HH:mm"),
+                 end_e.time().toString("HH:mm"),
+                 ppl_e.value(), notes_e.text(), bid)
+            )
+            conn2.commit(); conn2.close()
+            QMessageBox.information(self.page, "✅", "Booking updated successfully.")
+            self.refresh()

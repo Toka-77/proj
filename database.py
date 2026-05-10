@@ -599,6 +599,23 @@ def start_new_financial_year():
         conn.execute("INSERT INTO journal_lines (entry_id, account, debit, credit) VALUES (?,?,?,?)",
                      (je_id, 'Current Year Earnings', -retained_change, 0))
                      
+    # ── Clear all transactional data for the new year ────────────────────────
+    # Expenses
+    conn.execute("DELETE FROM expenses")
+    # Sales
+    conn.execute("DELETE FROM sales")
+    # Sessions
+    conn.execute("DELETE FROM sessions")
+    conn.execute("UPDATE rooms SET status='Available'")
+    # Sales invoices
+    conn.execute("DELETE FROM sales_invoice_items")
+    conn.execute("DELETE FROM sales_invoices")
+    # Purchase invoices
+    conn.execute("DELETE FROM purchase_invoice_items")
+    conn.execute("DELETE FROM purchase_invoices")
+    # Bookings
+    conn.execute("DELETE FROM bookings")
+
     conn.commit()
     conn.close()
-    return True, "Financial Year Closed successfully using Closing Entry logic."
+    return True, "Financial Year Closed successfully.\nAll expenses, sessions, invoices, and bookings have been cleared for the new year."
