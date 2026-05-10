@@ -122,7 +122,7 @@ def set_row(table, row, values):
     """Populate a table row."""
     for col, val in enumerate(values):
         item = QTableWidgetItem(str(val))
-        item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
         table.setItem(row, col, item)
 
 

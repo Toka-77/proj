@@ -668,20 +668,40 @@ class SalesInvoicePage:
         save = QPushButton(tr("💾  Save Invoice")); save.setObjectName("primary")
         save.setCursor(Qt.PointingHandCursor); save.clicked.connect(self.handle_save)
         rl.addWidget(save); rl.addStretch()
-        grid.addWidget(right, 2)
+        grid.addWidget(right, 3)
         lay.addLayout(grid)
         self._inv_ids = []
         self._refresh_cb = None
 
     def _add_item_row(self):
+        from PyQt5.QtWidgets import QGridLayout
         row_w = QWidget()
-        hl = QHBoxLayout(row_w); hl.setContentsMargins(0,0,0,0); hl.setSpacing(6)
-        prod = QComboBox(); prod.setMinimumWidth(120)
-        qty = QSpinBox(); qty.setMinimum(1); qty.setMaximum(9999)
-        price = QDoubleSpinBox(); price.setMaximum(99999); price.setDecimals(2); price.setPrefix("EGP ")
+        row_w.setObjectName("inv_row")
+        row_w.setStyleSheet("#inv_row{border:1px solid #2a3a5a; border-radius:6px; background:#141e33; padding:2px;}")
+        gl = QGridLayout(row_w); gl.setContentsMargins(8, 6, 8, 6); gl.setSpacing(6)
+
+        # ── Row 0: Product  |  Qty label + Qty ────────────────────────────────
+        prod = QComboBox(); prod.setMinimumHeight(32)
+        qty  = QSpinBox();  qty.setMinimum(1); qty.setMaximum(9999); qty.setFixedWidth(80); qty.setMinimumHeight(32)
+        price = QDoubleSpinBox(); price.setMaximum(99999); price.setDecimals(2)
+        price.setPrefix("EGP "); price.setMinimumHeight(32)
         if getattr(self, '_is_readonly', False):
             price.setReadOnly(True)
-        rm = QPushButton("✕"); rm.setFixedWidth(30); rm.setObjectName("danger")
+        rm = QPushButton("🗑"); rm.setFixedSize(32, 32); rm.setObjectName("danger")
+
+        lbl_prod  = QLabel(tr("Product")); lbl_prod.setStyleSheet("font-size:10px;color:#5a6a8a;")
+        lbl_qty   = QLabel(tr("Qty"));     lbl_qty.setStyleSheet("font-size:10px;color:#5a6a8a;")
+        lbl_price = QLabel(tr("Price (EGP)")); lbl_price.setStyleSheet("font-size:10px;color:#5a6a8a;")
+
+        gl.addWidget(lbl_prod,  0, 0)
+        gl.addWidget(lbl_qty,   0, 1)
+        gl.addWidget(prod,      1, 0)
+        gl.addWidget(qty,       1, 1)
+        gl.addWidget(lbl_price, 0, 2)
+        gl.addWidget(price,     1, 2)
+        gl.addWidget(rm,        1, 3)
+        gl.setColumnStretch(0, 4)
+        gl.setColumnStretch(2, 3)
 
         def on_prod_change(idx, p=prod, pr=price):
             data = p.currentData()
@@ -692,7 +712,6 @@ class SalesInvoicePage:
         qty.valueChanged.connect(lambda: self._update_total())
         price.valueChanged.connect(lambda: self._update_total())
 
-        hl.addWidget(prod, 3); hl.addWidget(qty, 1); hl.addWidget(price, 2); hl.addWidget(rm)
         entry = {'widget': row_w, 'prod': prod, 'qty': qty, 'price': price}
         self.item_rows.append(entry)
         self.items_layout.addWidget(row_w)
@@ -714,7 +733,8 @@ class SalesInvoicePage:
                 cb.blockSignals(True)
                 for p in prods:
                     # p = (sku, name, category, unit_cost, selling_price, quantity)
-                    cb.addItem(f"{p[1]}  [stock: {p[5]}]", (p[0], p[4], p[3]))
+                    cb.addItem(p[1], (p[0], p[4], p[3]))
+                    cb.setItemData(cb.count() - 1, f"Stock: {p[5]}  |  Price: {p[4]:.2f} EGP", Qt.ToolTipRole)
                 cb.blockSignals(False)
                 if cb.count() > 0:
                     data = cb.currentData()
@@ -924,22 +944,8 @@ class PurchaseInvoicePage:
         rl.addWidget(make_divider())
         rl.addWidget(QLabel(tr("Products"), objectName="sec_title"))
 
-        hdr = QWidget()
-        hdr_l = QHBoxLayout(hdr); hdr_l.setContentsMargins(0,0,26,0); hdr_l.setSpacing(4)
-        def _hdr(text, stretch=0, width=0):
-            lbl = QLabel(text)
-            lbl.setStyleSheet("color:#5a6a8a; font-size:10px; font-weight:600; letter-spacing:0.5px;")
-            if width: lbl.setFixedWidth(width)
-            hdr_l.addWidget(lbl, stretch)
-        _hdr(tr("Product Name"), stretch=2)
-        _hdr(tr("Category"),  width=90)
-        _hdr(tr("Qty"),       width=72)
-        _hdr("Cost (EGP)",width=130)
-        _hdr("Sale (EGP)",width=130)
-        rl.addWidget(hdr)
-
         self.item_rows = []
-        self.items_layout = QVBoxLayout(); self.items_layout.setSpacing(6)
+        self.items_layout = QVBoxLayout(); self.items_layout.setSpacing(8)
         rl.addLayout(self.items_layout)
 
         ab = QPushButton(tr("➕  Add Line")); ab.setObjectName("secondary")
@@ -962,25 +968,50 @@ class PurchaseInvoicePage:
         save.setMinimumHeight(38); save.setCursor(Qt.PointingHandCursor)
         save.clicked.connect(self.handle_save)
         rl.addWidget(save); rl.addStretch()
-        grid.addWidget(right, 2)
+        grid.addWidget(right, 3)
         lay.addLayout(grid)
         self._refresh_cb = None
 
     def _add_item_row(self):
+        from PyQt5.QtWidgets import QGridLayout
         row_w = QWidget()
-        hl = QHBoxLayout(row_w); hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(4)
+        row_w.setObjectName("inv_row")
+        row_w.setStyleSheet("#inv_row{border:1px solid #2a3a5a; border-radius:6px; background:#141e33; padding:2px;}")
+        gl = QGridLayout(row_w); gl.setContentsMargins(8, 6, 8, 6); gl.setSpacing(6)
 
-        name_fld  = QLineEdit();      name_fld.setMinimumWidth(120); name_fld.setMinimumHeight(34); name_fld.setPlaceholderText("Type product name…")
-        cat_combo = QComboBox();      cat_combo.addItems([tr("Drinks"),tr("Snacks"),tr("Hot"),tr("Other")]); cat_combo.setFixedWidth(90); cat_combo.setMinimumHeight(34)
-        qty_spin  = QSpinBox();       qty_spin.setMinimum(1); qty_spin.setMaximum(9999); qty_spin.setFixedWidth(72); qty_spin.setMinimumHeight(34)
-        cost_spin = QDoubleSpinBox(); cost_spin.setMaximum(99999); cost_spin.setDecimals(2); cost_spin.setPrefix("EGP "); cost_spin.setFixedWidth(130); cost_spin.setMinimumHeight(34)
-        sale_spin = QDoubleSpinBox(); sale_spin.setMaximum(99999); sale_spin.setDecimals(2); sale_spin.setPrefix("EGP "); sale_spin.setFixedWidth(130); sale_spin.setMinimumHeight(34)
-        rm_btn    = QPushButton("✕"); rm_btn.setFixedWidth(30); rm_btn.setMinimumHeight(34); rm_btn.setObjectName("danger")
+        name_fld  = QLineEdit();  name_fld.setMinimumHeight(32); name_fld.setPlaceholderText(tr("Product name…"))
+        cat_combo = QComboBox(); cat_combo.addItems([tr("Drinks"),tr("Snacks"),tr("Hot"),tr("Other")]); cat_combo.setMinimumHeight(32)
+        qty_spin  = QSpinBox();  qty_spin.setMinimum(1); qty_spin.setMaximum(9999); qty_spin.setFixedWidth(80); qty_spin.setMinimumHeight(32)
+        cost_spin = QDoubleSpinBox(); cost_spin.setMaximum(99999); cost_spin.setDecimals(2); cost_spin.setPrefix("EGP "); cost_spin.setMinimumHeight(32)
+        sale_spin = QDoubleSpinBox(); sale_spin.setMaximum(99999); sale_spin.setDecimals(2); sale_spin.setPrefix("EGP "); sale_spin.setMinimumHeight(32)
+        rm_btn    = QPushButton("🗑"); rm_btn.setFixedSize(32, 32); rm_btn.setObjectName("danger")
 
-        sale_spin.hide()
+        lbl_name = QLabel(tr("Product Name")); lbl_name.setStyleSheet("font-size:10px;color:#5a6a8a;")
+        lbl_cat  = QLabel(tr("Category"));     lbl_cat.setStyleSheet("font-size:10px;color:#5a6a8a;")
+        lbl_qty  = QLabel(tr("Qty"));           lbl_qty.setStyleSheet("font-size:10px;color:#5a6a8a;")
+        lbl_cost = QLabel(tr("Cost (EGP)"));   lbl_cost.setStyleSheet("font-size:10px;color:#5a6a8a;")
+        lbl_sale = QLabel(tr("Sale (EGP)"));   lbl_sale.setStyleSheet("font-size:10px;color:#5a6a8a;")
 
-        info_cat  = QLabel(""); info_cat.setFixedWidth(72); info_cat.setStyleSheet("color:#5a9cf5; font-size:10px;"); info_cat.hide()
-        info_sale = QLabel(""); info_sale.setFixedWidth(110); info_sale.setStyleSheet("color:#3ecf8e; font-size:10px;"); info_sale.hide()
+        # Row 0: labels
+        gl.addWidget(lbl_name, 0, 0)
+        gl.addWidget(lbl_cat,  0, 1)
+        gl.addWidget(lbl_qty,  0, 2)
+        gl.addWidget(lbl_cost, 0, 3)
+        gl.addWidget(lbl_sale, 0, 4)
+        # Row 1: widgets
+        gl.addWidget(name_fld,  1, 0)
+        gl.addWidget(cat_combo, 1, 1)
+        gl.addWidget(qty_spin,  1, 2)
+        gl.addWidget(cost_spin, 1, 3)
+        gl.addWidget(sale_spin, 1, 4)
+        gl.addWidget(rm_btn,    1, 5)
+        gl.setColumnStretch(0, 4)
+        gl.setColumnStretch(1, 2)
+        gl.setColumnStretch(3, 3)
+        gl.setColumnStretch(4, 3)
+
+        info_cat  = QLabel(""); info_cat.setStyleSheet("color:#5a9cf5; font-size:10px;"); info_cat.hide()
+        info_sale = QLabel(""); info_sale.setStyleSheet("color:#3ecf8e; font-size:10px;"); info_sale.hide()
 
         entry = {
             'widget': row_w, 'name_fld': name_fld,
@@ -998,25 +1029,19 @@ class PurchaseInvoicePage:
                 e['prod_data'] = prod
                 e['name_fld'].setStyleSheet("color:#3ecf8e;")
                 e['cat_combo'].hide(); e['sale'].hide()
-                e['info_cat'].setText(prod[2])
-                e['info_sale'].setText(f"Stock: {prod[5]}")
-                e['info_cat'].show(); e['info_sale'].show()
+                lbl_cat.hide(); lbl_sale.hide()
+                e['cost'].setValue(prod[3])
             else:
                 e['is_new'] = True
                 e['prod_data'] = None
                 e['name_fld'].setStyleSheet("")
-                e['info_cat'].hide(); e['info_sale'].hide()
                 e['cat_combo'].show(); e['sale'].show()
+                lbl_cat.show(); lbl_sale.show()
 
         name_fld.editingFinished.connect(lambda e=entry: _lookup(e))
         qty_spin.valueChanged.connect(self._update_total)
         cost_spin.valueChanged.connect(self._update_total)
 
-        hl.addWidget(name_fld, 2)
-        hl.addWidget(cat_combo); hl.addWidget(info_cat)
-        hl.addWidget(qty_spin); hl.addWidget(cost_spin)
-        hl.addWidget(sale_spin); hl.addWidget(info_sale)
-        hl.addWidget(rm_btn)
         self.item_rows.append(entry)
         self.items_layout.addWidget(row_w)
 
@@ -1914,6 +1939,9 @@ class BookingPage:
         self.date_filter = QDateEdit(QDate.currentDate())
         self.date_filter.setCalendarPopup(True)
         self.date_filter.setDisplayFormat("yyyy-MM-dd")
+        self.date_filter.setMinimumWidth(160)
+        self.date_filter.setMinimumHeight(34)
+        self.date_filter.setStyleSheet("font-size:13px; padding: 2px 6px;")
         self.date_filter.dateChanged.connect(self.refresh)
         filter_row.addWidget(self.date_filter)
         filter_row.addStretch()
